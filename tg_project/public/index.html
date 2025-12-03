@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>TG Panel - Telegram Sessions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050716;
+      --card-bg: #0f172a;
+      --card-border: #1f2937;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56,189,248,0.12);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --danger: #f97373;
+      --success: #4ade80;
+      --warning: #facc15;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #1d283a 0, #050716 45%, #020617 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 24px;
+    }
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      display: grid;
+      grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.1fr);
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      body {
+        padding: 12px;
+      }
+      .container {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    .card {
+      background: radial-gradient(circle at top, rgba(148,163,184,0.16), transparent 55%) , var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid rgba(148,163,184,0.25);
+      box-shadow:
+        0 18px 45px rgba(15,23,42,0.9),
+        0 0 0 1px rgba(148,163,184,0.18);
+      padding: 18px 18px 16px;
+      backdrop-filter: blur(24px);
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top right, rgba(56,189,248,0.12), transparent 60%),
+        radial-gradient(circle at bottom left, rgba(129,140,248,0.12), transparent 65%);
+      opacity: 0.75;
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+    .card-inner {
+      position: relative;
+      z-index: 1;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .title span.badge {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.7);
+      border: 1px solid rgba(148,163,184,0.45);
+      color: var(--muted);
+    }
+    .title-gradient {
+      background: linear-gradient(120deg, #e5e7eb, #bae6fd, #a5b4fc);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+    .pill {
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.35);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: radial-gradient(circle at top left, rgba(59,130,246,0.25), transparent 55%);
+    }
+    .pill-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--success);
+      box-shadow: 0 0 0 6px rgba(74,222,128,0.18);
+    }
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+      margin-top: 4px;
+      max-height: 440px;
+      overflow: auto;
+      padding-right: 6px;
+    }
+    @media (min-width: 1100px) {
+      .sessions-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .session-card {
+      background: rgba(15,23,42,0.92);
+      border-radius: 14px;
+      border: 1px solid rgba(148,163,184,0.35);
+      padding: 12px 12px 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .session-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.19), transparent 60%);
+      opacity: 0.9;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    .session-main {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .session-name {
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--muted);
+      box-shadow: 0 0 0 3px rgba(148,163,184,0.3);
+    }
+    .status-dot.active {
+      background: var(--success);
+      box-shadow: 0 0 0 3px rgba(74,222,128,0.3);
+    }
+    .status-dot.syncing {
+      background: var(--warning);
+      box-shadow: 0 0 0 3px rgba(250,204,21,0.3);
+    }
+    .status-dot.error {
+      background: var(--danger);
+      box-shadow: 0 0 0 3px rgba(248,113,113,0.3);
+    }
+    .session-meta {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+    }
+    .meta-pill {
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.35);
+      background: rgba(15,23,42,0.8);
+    }
+    .session-actions {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-end;
+    }
+    button {
+      border: none;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      background: transparent;
+    }
+    .btn {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.6);
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.3), rgba(15,23,42,0.95));
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.14s ease-out;
+      white-space: nowrap;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(15,23,42,0.8);
+      border-color: rgba(191,219,254,0.9);
+    }
+    .btn-ghost {
+      background: rgba(15,23,42,0.88);
+      border-color: rgba(148,163,184,0.5);
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, rgba(248,113,113,0.2), rgba(127,29,29,0.95));
+      border-color: rgba(248,113,113,0.8);
+    }
+    .btn-sm {
+      padding: 4px 9px;
+      font-size: 10px;
+    }
+    .section-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .section-title span.indicator {
+      font-size: 11px;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(148,163,184,0.6);
+      background: rgba(15,23,42,0.9);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.1s ease-out, box-shadow 0.1s ease-out, background 0.1s ease-out;
+    }
+    input:focus {
+      border-color: rgba(56,189,248,0.9);
+      box-shadow: 0 0 0 1px rgba(56,189,248,0.4);
+      background: rgba(15,23,42,1);
+    }
+    .helper {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .code-input {
+      letter-spacing: 0.32em;
+      text-align: center;
+      font-weight: 600;
+    }
+    .log {
+      margin-top: 8px;
+      font-size: 11px;
+      max-height: 150px;
+      overflow: auto;
+      padding: 8px 9px;
+      border-radius: 12px;
+      background: rgba(15,23,42,0.92);
+      border: 1px solid rgba(30,64,175,0.7);
+    }
+    .log-line {
+      color: var(--muted);
+      margin-bottom: 3px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .log-line time {
+      color: rgba(148,163,184,0.9);
+      font-size: 10px;
+      margin-right: 6px;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .chip {
+      font-size: 10px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.6);
+      background: rgba(15,23,42,0.95);
+      color: var(--muted);
+    }
+    .badge-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.7);
+      font-size: 10px;
+      padding: 0 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <main class="card">
+      <div class="card-inner">
+        <div class="card-header">
+          <div>
+            <div class="title">
+              <span class="badge">TG PANEL</span>
+              <span class="title-gradient">Telegram Sessions</span>
+            </div>
+            <div class="chips">
+              <span class="chip">MTProto userbot</span>
+              <span class="chip">Auto-join t.me</span>
+              <span class="chip">Multi-session</span>
+            </div>
+          </div>
+          <div class="pill">
+            <span class="pill-dot"></span>
+            <span>Панель онлайн</span>
+          </div>
+        </div>
+
+        <div class="section-title">
+          <span>Сессии Telegram</span>
+          <span class="indicator">
+            <span>Всего: <span id="totalSessions">0</span></span>
+          </span>
+        </div>
+
+        <div id="sessions" class="sessions-grid">
+          <!-- Sessions will be rendered here -->
+        </div>
+      </div>
+    </main>
+
+    <aside class="card">
+      <div class="card-inner">
+        <div class="section-title">
+          <span>Новая сессия</span>
+          <span class="indicator">
+            <span id="currentStatus">Ожидает ввода…</span>
+          </span>
+        </div>
+
+        <div class="field-group">
+          <label for="sessionName">Имя сессии</label>
+          <input id="sessionName" placeholder="my_account_1" />
+          <div class="helper">Латиница, цифры, _ и -</div>
+        </div>
+
+        <div class="field-group">
+          <label for="phone">Номер телефона</label>
+          <input id="phone" placeholder="+79991234567" />
+          <div class="helper">Номер Telegram-аккаунта для userbot-сессии</div>
+        </div>
+
+        <button id="createSession" class="btn" style="width:100%; justify-content:center; margin-bottom:10px;">
+          <span>➕ Создать сессию</span>
+        </button>
+
+        <div class="field-group">
+          <label for="authCode">Код авторизации (из Telegram)</label>
+          <input id="authCode" class="code-input" maxlength="10" placeholder="12345" />
+          <div class="helper">После запроса сессии код придёт в официальное приложение Telegram</div>
+        </div>
+
+        <button id="confirmCode" class="btn btn-ghost" style="width:100%; justify-content:center;">
+          <span>✅ Подтвердить код</span>
+        </button>
+
+        <div class="section-title" style="margin-top:16px;">
+          <span>Вступление в группу</span>
+        </div>
+
+        <div class="field-group">
+          <label for="joinLink">t.me ссылка</label>
+          <input id="joinLink" placeholder="https://t.me/your_group_or_invite" />
+          <div class="helper">Выделенная сессия вступит в группу по ссылке</div>
+        </div>
+
+        <button id="joinGroup" class="btn btn-ghost" style="width:100%; justify-content:center;">
+          <span>🔗 Добавить задачу на вступление</span>
+        </button>
+
+        <div class="section-title" style="margin-top:16px;">
+          <span>Интервалы</span>
+        </div>
+
+        <div class="field-group">
+          <label>Интервал между вступлениями (сек.)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="intervalMin" type="number" min="3" max="3600" style="flex:1;" placeholder="мин, напр. 5" />
+            <input id="intervalMax" type="number" min="3" max="3600" style="flex:1;" placeholder="макс, напр. 30" />
+          </div>
+          <div class="helper">По умолчанию 5–30 сек. Диапазон 3–3600 сек.</div>
+        </div>
+
+        <button id="saveIntervals" class="btn btn-ghost" style="width:100%; justify-content:center;">
+          <span>⏱️ Сохранить интервалы</span>
+        </button>
+
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const sessionsContainer = document.getElementById('sessions');
+    const totalSessionsSpan = document.getElementById('totalSessions');
+    const currentStatusSpan = document.getElementById('currentStatus');
+    const logEl = document.getElementById('log');
+
+    const createSessionBtn = document.getElementById('createSession');
+    const confirmCodeBtn = document.getElementById('confirmCode');
+    const joinGroupBtn = document.getElementById('joinGroup');
+      const saveIntervalsBtn = document.getElementById('saveIntervals');
+
+    const sessionNameInput = document.getElementById('sessionName');
+    const phoneInput = document.getElementById('phone');
+    const authCodeInput = document.getElementById('authCode');
+    const joinLinkInput = document.getElementById('joinLink');
+      const intervalMinInput = document.getElementById('intervalMin');
+      const intervalMaxInput = document.getElementById('intervalMax');
+
+    let lastCreatedSession = null;
+
+    function log(message, type = 'info') {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      const ts = document.createElement('time');
+      ts.textContent = new Date().toLocaleTimeString('ru-RU', { hour12: false });
+      line.appendChild(ts);
+      const span = document.createElement('span');
+      span.textContent = ' ' + message;
+      if (type === 'error') {
+        span.style.color = '#fca5a5';
+      } else if (type === 'success') {
+        span.style.color = '#bbf7d0';
+      }
+      line.appendChild(span);
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function statusText(status) {
+      switch (status) {
+        case 'active': return 'Активна';
+        case 'auth': return 'Ожидает кода';
+        case 'error': return 'Ошибка';
+        case 'inactive':
+        default: return 'Не активна';
+      }
+    }
+
+    function renderSessions(sessions) {
+      sessionsContainer.innerHTML = '';
+      totalSessionsSpan.textContent = sessions.length;
+      if (!sessions.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'Сессий пока нет. Создайте первую справа.';
+        empty.style.fontSize = '12px';
+        empty.style.color = '#9ca3af';
+        sessionsContainer.appendChild(empty);
+        return;
+      }
+
+      sessions.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'session-card';
+
+        const main = document.createElement('div');
+        main.className = 'session-main';
+
+        const left = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'session-name';
+        const dot = document.createElement('span');
+        dot.className = 'status-dot ' + (s.status || 'inactive');
+        name.appendChild(dot);
+        const nameText = document.createElement('span');
+        nameText.textContent = s.name;
+        name.appendChild(nameText);
+        left.appendChild(name);
+
+        const meta = document.createElement('div');
+        meta.className = 'session-meta';
+        const st = document.createElement('span');
+        st.className = 'meta-pill';
+        st.textContent = 'Статус: ' + statusText(s.status);
+        meta.appendChild(st);
+        if (s.phone) {
+          const ph = document.createElement('span');
+          ph.className = 'meta-pill';
+          ph.textContent = '📞 ' + s.phone;
+          meta.appendChild(ph);
+        }
+        if (typeof s.joinQueueLength === 'number') {
+          const q = document.createElement('span');
+          q.className = 'meta-pill';
+          q.innerHTML = 'Очередь: <strong>' + s.joinQueueLength + '</strong>';
+          meta.appendChild(q);
+        }
+        if (s.intervals && typeof s.intervals.min === 'number' && typeof s.intervals.max === 'number') {
+          const it = document.createElement('span');
+          it.className = 'meta-pill';
+          it.textContent = `⏱ ${s.intervals.min}-${s.intervals.max} сек`;
+          meta.appendChild(it);
+        }
+        left.appendChild(meta);
+
+        const right = document.createElement('div');
+        right.className = 'session-actions';
+
+        const joinBadge = document.createElement('span');
+        joinBadge.className = 'badge-number';
+        joinBadge.textContent = s.joinQueueLength || 0;
+        right.appendChild(joinBadge);
+
+        if (s.status !== 'active') {
+          const actBtn = document.createElement('button');
+          actBtn.className = 'btn btn-sm btn-ghost';
+          actBtn.textContent = 'Активировать';
+          actBtn.onclick = async (ev) => {
+            ev.stopPropagation();
+            try {
+              log(`Активация сессии ${s.name}…`);
+              const res = await fetch(`/api/tg/sessions/${encodeURIComponent(s.name)}/activate`, {
+                method: 'POST',
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || 'Ошибка активации');
+              log(`Сессия ${s.name} активирована`, 'success');
+              await loadSessions();
+            } catch (e) {
+              log(`Ошибка активации ${s.name}: ${e.message}`, 'error');
+            }
+          };
+          right.appendChild(actBtn);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-sm btn-danger';
+        delBtn.textContent = 'Удалить';
+        delBtn.onclick = async () => {
+          if (!confirm(`Удалить сессию ${s.name}?`)) return;
+          try {
+            const res = await fetch(`/api/tg/sessions/${encodeURIComponent(s.name)}`, {
+              method: 'DELETE'
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Ошибка удаления');
+            log(`Сессия ${s.name} удалена`, 'success');
+            loadSessions();
+          } catch (e) {
+            log(`Ошибка удаления ${s.name}: ${e.message}`, 'error');
+          }
+        };
+        right.appendChild(delBtn);
+
+        main.appendChild(left);
+        main.appendChild(right);
+        card.appendChild(main);
+        sessionsContainer.appendChild(card);
+
+        card.onclick = () => {
+          sessionNameInput.value = s.name;
+          lastCreatedSession = s.name;
+          currentStatusSpan.textContent = `Выбрана сессия: ${s.name}`;
+          if (s.intervals) {
+            intervalMinInput.value = s.intervals.min ?? '';
+            intervalMaxInput.value = s.intervals.max ?? '';
+          }
+        };
+      });
+    }
+
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/tg/sessions');
+        const data = await res.json();
+        renderSessions(data || []);
+      } catch (e) {
+        log('Ошибка загрузки сессий: ' + e.message, 'error');
+      }
+    }
+
+    createSessionBtn.onclick = async () => {
+      const name = sessionNameInput.value.trim();
+      const phone = phoneInput.value.trim();
+      if (!name || !phone) {
+        log('Укажите имя сессии и номер телефона', 'error');
+        return;
+      }
+      try {
+        currentStatusSpan.textContent = 'Создание сессии…';
+        const res = await fetch('/api/tg/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка создания');
+        lastCreatedSession = data.name;
+        log(`Сессия ${data.name} создана. Код придёт в Telegram`, 'success');
+        currentStatusSpan.textContent = `Ожидание кода для ${data.name}`;
+        await loadSessions();
+      } catch (e) {
+        currentStatusSpan.textContent = 'Ошибка';
+        log('Ошибка создания сессии: ' + e.message, 'error');
+      }
+    };
+
+    confirmCodeBtn.onclick = async () => {
+      const code = authCodeInput.value.trim();
+      const name = sessionNameInput.value.trim() || lastCreatedSession;
+      if (!name) {
+        log('Сначала создайте или выберите сессию', 'error');
+        return;
+      }
+      if (!code) {
+        log('Введите код авторизации', 'error');
+        return;
+      }
+      try {
+        currentStatusSpan.textContent = `Подтверждение кода для ${name}…`;
+        const res = await fetch(`/api/tg/sessions/${encodeURIComponent(name)}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка подтверждения');
+        log(`Сессия ${name} успешно активирована`, 'success');
+        currentStatusSpan.textContent = `Сессия ${name} активна`;
+        authCodeInput.value = '';
+        await loadSessions();
+      } catch (e) {
+        currentStatusSpan.textContent = 'Ошибка';
+        log('Ошибка подтверждения кода: ' + e.message, 'error');
+      }
+    };
+
+    joinGroupBtn.onclick = async () => {
+      const name = sessionNameInput.value.trim() || lastCreatedSession;
+      const link = joinLinkInput.value.trim();
+      if (!name) {
+        log('Выберите сессию для вступления', 'error');
+        return;
+      }
+      const trimmed = link.trim();
+      const looksLikeTg =
+        trimmed.startsWith('@') ||
+        trimmed.toLowerCase().startsWith('t.me/') ||
+        trimmed.toLowerCase().startsWith('http://t.me/') ||
+        trimmed.toLowerCase().startsWith('https://t.me/');
+      if (!trimmed || !looksLikeTg) {
+        log('Введите корректную ссылку: https://t.me/..., t.me/username или @username', 'error');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/tg/sessions/${encodeURIComponent(name)}/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ link })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка добавления задачи');
+        log(`Задача на вступление для ${name} добавлена: ${link}`, 'success');
+        joinLinkInput.value = '';
+        await loadSessions();
+      } catch (e) {
+        log('Ошибка очереди вступления: ' + e.message, 'error');
+      }
+    };
+
+    saveIntervalsBtn.onclick = async () => {
+      const name = sessionNameInput.value.trim() || lastCreatedSession;
+      if (!name) {
+        log('Выберите сессию для настройки интервалов', 'error');
+        return;
+      }
+      const min = Number(intervalMinInput.value);
+      const max = Number(intervalMaxInput.value);
+      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        log('Введите интервалы (числа в секундах)', 'error');
+        return;
+      }
+      if (min < 3 || max < min || max > 3600) {
+        log('Интервалы должны быть от 3 до 3600 сек, min ≤ max', 'error');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/tg/sessions/${encodeURIComponent(name)}/intervals`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ min, max }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка сохранения интервалов');
+        log(`Интервалы для ${name} обновлены: ${min}-${max} сек`, 'success');
+        await loadSessions();
+      } catch (e) {
+        log('Ошибка сохранения интервалов: ' + e.message, 'error');
+      }
+    };
+
+    // WebSocket for live updates
+    const socket = io();
+    socket.on('connect', () => {
+      log('WS подключен', 'success');
+    });
+    socket.on('tg_session_status', () => {
+      loadSessions();
+    });
+    socket.on('tg_join_queue_update', () => {
+      loadSessions();
+    });
+
+    loadSessions();
+  </script>
+</body>
+</html>
+
+

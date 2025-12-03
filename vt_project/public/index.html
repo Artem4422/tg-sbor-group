@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VT Panel - Управление сессиями WhatsApp</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            color: #333;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .sessions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .session-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+
+        .session-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .session-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-inactive { background: #fee; color: #c33; }
+        .status-active { background: #efe; color: #3c3; }
+        .status-syncing { background: #ffe; color: #cc3; }
+        .status-qr { background: #eef; color: #33c; }
+        .status-error { background: #fee; color: #c33; }
+
+        .session-info {
+            margin: 15px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .session-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            margin: 20px auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .qr-container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .qr-container img {
+            max-width: 100%;
+            border-radius: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .links-section, .users-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .section-header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .links-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .link-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .link-url {
+            font-family: monospace;
+            color: #667eea;
+            font-size: 12px;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+            .close-btn {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: none;
+                border: none;
+                font-size: 28px;
+                cursor: pointer;
+                color: #999;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10;
+                touch-action: manipulation;
+            }
+
+            .close-btn:hover {
+                color: #333;
+            }
+
+            .close-btn:active {
+                background: rgba(0,0,0,0.1);
+                border-radius: 50%;
+            }
+
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+        }
+
+        .notification {
+            background: white;
+            border-radius: 10px;
+            padding: 15px 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .notification.success { border-left-color: #27ae60; }
+        .notification.error { border-left-color: #e74c3c; }
+        .notification.info { border-left-color: #3498db; }
+        .notification.warning { border-left-color: #f39c12; }
+
+        .notification-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .notification-content {
+            flex: 1;
+        }
+
+        .notification-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .notification-message {
+            color: #666;
+            font-size: 13px;
+            white-space: pre-line;
+            line-height: 1.4;
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #999;
+            cursor: pointer;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .notification-close:hover {
+            color: #333;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .groups-modal-content {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .group-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .group-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .group-size {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .notification-history-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+            transition: all 0.2s;
+        }
+
+        .notification-history-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .notification-history-item.success { border-left-color: #27ae60; }
+        .notification-history-item.error { border-left-color: #e74c3c; }
+        .notification-history-item.info { border-left-color: #3498db; }
+
+        .notification-history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .notification-history-time {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .notification-history-type {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .notification-history-message {
+            color: #333;
+            font-size: 14px;
+            white-space: pre-line;
+            line-height: 1.5;
+        }
+
+        .notification-history-link {
+            color: #667eea;
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .notification-history-link:hover {
+            text-decoration: underline;
+        }
+
+        .empty-notifications {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .bot-selector {
+            background: white;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .bot-selector-content {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+            .bot-select {
+                flex: 1;
+                min-width: 200px;
+                padding: 10px 15px;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                font-size: 14px;
+                background: white;
+                cursor: pointer;
+                transition: border-color 0.3s;
+            }
+
+            .bot-select:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+
+            .bot-select:hover {
+                border-color: #667eea;
+            }
+
+            @media (max-width: 768px) {
+                .bot-selector {
+                    padding: 12px 15px;
+                }
+
+                .bot-selector-content {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+
+                .bot-select {
+                    width: 100%;
+                    min-width: 100%;
+                }
+
+                .bot-selector-content .btn {
+                    width: 100%;
+                    margin-left: 0 !important;
+                }
+            }
+
+        /* Мобильные стили */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                max-width: 100%;
+            }
+
+            .header {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .header p {
+                font-size: 12px;
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+
+            .stat-card {
+                padding: 15px;
+            }
+
+            .stat-card .value {
+                font-size: 24px;
+            }
+
+            .stat-card h3 {
+                font-size: 11px;
+            }
+
+            .actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+                padding: 14px 20px;
+                font-size: 14px;
+            }
+
+            /* Модальное окно истории уведомлений для мобильных */
+            #notificationsHistoryModal .modal-content {
+                width: calc(100% - 20px) !important;
+                max-width: calc(100% - 20px) !important;
+                padding: 15px !important;
+                max-height: calc(100vh - 40px) !important;
+                margin: 10px !important;
+                border-radius: 12px;
+            }
+
+            #notificationsHistoryModal .modal-header {
+                font-size: 18px;
+                margin-bottom: 12px;
+                padding-right: 30px;
+            }
+
+            #notificationsHistoryModal .modal-header > div:first-of-type {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 10px;
+            }
+
+            #notificationsHistoryModal .modal-header > div:last-of-type {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-top: 10px;
+            }
+
+            #notificationsHistoryModal .modal-header > div:last-of-type .btn {
+                width: auto;
+                min-width: auto;
+                padding: 8px 12px;
+                font-size: 12px;
+                flex: 1 1 auto;
+                min-width: calc(50% - 5px);
+            }
+
+            #notificationsHistoryModal .modal-header > div:last-of-type .btn-danger {
+                min-width: 100% !important;
+                margin-top: 5px;
+            }
+
+            #notificationsHistoryModal #notificationsHistoryContainer {
+                max-height: calc(100vh - 200px) !important;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                margin-top: 15px;
+            }
+
+            .notification-history-item {
+                padding: 12px;
+                margin-bottom: 8px;
+            }
+
+            .notification-history-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+                margin-bottom: 6px;
+            }
+
+            .notification-history-type {
+                font-size: 10px;
+            }
+
+            .notification-history-time {
+                font-size: 11px;
+            }
+
+            .notification-history-message {
+                font-size: 12px;
+                line-height: 1.4;
+            }
+
+            .empty-notifications {
+                padding: 30px 20px;
+                font-size: 14px;
+            }
+
+            .sessions-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .session-card {
+                padding: 15px;
+            }
+
+            .session-name {
+                font-size: 16px;
+            }
+
+            .status-badge {
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+
+            .session-info {
+                font-size: 13px;
+            }
+
+            .session-actions {
+                flex-direction: column;
+            }
+
+            .btn-small {
+                width: 100%;
+                padding: 10px;
+            }
+
+            .modal-content {
+                width: 95%;
+                max-width: 95%;
+                padding: 20px;
+                max-height: 90vh;
+                margin: 10px auto;
+                position: relative;
+            }
+
+            /* Улучшения для всех модальных окон на мобильных */
+            .modal {
+                padding: 10px;
+                align-items: flex-start;
+                padding-top: 20px;
+            }
+
+            .modal.active {
+                display: flex;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .modal-header {
+                font-size: 20px;
+                margin-bottom: 15px;
+            }
+
+            .notification-container {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: calc(100% - 20px);
+            }
+
+            .notification {
+                padding: 12px 15px;
+            }
+
+            .notification-icon {
+                font-size: 20px;
+            }
+
+            .notification-title {
+                font-size: 13px;
+            }
+
+            .notification-message {
+                font-size: 12px;
+            }
+
+            .form-group input {
+                padding: 14px;
+                font-size: 16px; /* Предотвращает зум на iOS */
+            }
+
+            .qr-container {
+                padding: 15px;
+            }
+
+            .qr-container img {
+                max-width: 100%;
+            }
+
+            .links-list, .group-item {
+                padding: 12px;
+            }
+
+            .link-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .link-url {
+                font-size: 11px;
+                word-break: break-all;
+            }
+
+            .pagination {
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+
+            .notification-history-item {
+                padding: 12px;
+            }
+
+            .notification-history-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+
+            .notification-history-message {
+                font-size: 13px;
+            }
+
+            .groups-modal-content {
+                max-height: 65vh;
+            }
+
+            /* Фильтры в модальном окне */
+            .modal-header > div {
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+
+            .modal-header > div .btn {
+                width: auto;
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+
+            /* Улучшения для touch */
+            .btn, .btn-small, .notification-close, .close-btn {
+                min-height: 44px; /* Минимальный размер для удобного нажатия */
+                touch-action: manipulation;
+            }
+
+            /* Скрываем badge на маленьких экранах если слишком длинный */
+            #notificationsBadge {
+                font-size: 10px;
+                padding: 1px 5px;
+            }
+        }
+
+        /* Очень маленькие экраны */
+        @media (max-width: 480px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .stat-card .value {
+                font-size: 20px;
+            }
+
+            .session-card {
+                padding: 12px;
+            }
+
+            .modal-content {
+                padding: 15px;
+            }
+
+            .notification {
+                padding: 10px 12px;
+            }
+        }
+
+        /* Горизонтальная ориентация на мобильных */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .modal-content {
+                max-height: 85vh;
+            }
+
+            .groups-modal-content {
+                max-height: 75vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <div class="container">
+        <!-- Bot Selector -->
+        <div class="bot-selector">
+            <div class="bot-selector-content">
+                <label for="botSelect" style="font-weight: 600; color: #333; margin-right: 10px;">🤖 Бот:</label>
+                <select id="botSelect" class="bot-select" onchange="switchBot()">
+                    <option value="default">Основной бот (localhost:3000)</option>
+                </select>
+                <button class="btn btn-small btn-secondary" onclick="showAddBotModal()" style="margin-left: 10px; padding: 8px 12px;">
+                    ➕ Добавить бота
+                </button>
+            </div>
+        </div>
+
+        <div class="header">
+            <h1>🚀 VT Panel - Управление сессиями WhatsApp</h1>
+            <p>Веб-панель для управления автоматизацией вступления в группы</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Всего сессий</h3>
+                <div class="value" id="totalSessions">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Активных</h3>
+                <div class="value" id="activeSessions">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Сохранено ссылок</h3>
+                <div class="value" id="totalLinks">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>В очереди</h3>
+                <div class="value" id="totalQueue">0</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" onclick="showAddSessionModal()">
+                ➕ Добавить сессию
+            </button>
+            <button class="btn btn-secondary" onclick="loadLinks()">
+                🔗 Сохраненные ссылки
+            </button>
+            <button class="btn btn-secondary" onclick="loadUsers()">
+                👥 Пользователи
+            </button>
+            <button class="btn btn-secondary" onclick="showNotificationsHistory()">
+                🔔 Уведомления <span id="notificationsBadge" style="background: #e74c3c; color: white; border-radius: 10px; padding: 2px 6px; font-size: 11px; margin-left: 5px; display: none;">0</span>
+            </button>
+        </div>
+
+        <div id="sessionsContainer" class="sessions-grid">
+            <div class="loading">Загрузка сессий...</div>
+        </div>
+    </div>
+
+    <!-- Add Session Modal -->
+    <div id="addSessionModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal('addSessionModal')">&times;</button>
+            <div class="modal-header">Добавить новую сессию</div>
+            <div class="form-group">
+                <label>Имя сессии:</label>
+                <input type="text" id="sessionNameInput" placeholder="Например: worker1">
+            </div>
+            <button class="btn btn-primary" onclick="createSession()">Создать</button>
+        </div>
+    </div>
+
+    <!-- QR Modal -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal('qrModal')">&times;</button>
+            <div class="modal-header">QR код для подключения</div>
+            <div id="qrContainer" class="qr-container">
+                <div class="loading">Генерация QR кода...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Links Modal -->
+    <div id="linksModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal('linksModal')">&times;</button>
+            <div class="modal-header">Сохраненные ссылки</div>
+            <div id="linksContainer"></div>
+            <div class="pagination" id="linksPagination"></div>
+        </div>
+    </div>
+
+    <!-- Users Modal -->
+    <div id="usersModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal('usersModal')">&times;</button>
+            <div class="modal-header">Пользователи бота</div>
+            <div id="usersContainer"></div>
+        </div>
+    </div>
+
+    <!-- Groups Modal -->
+    <div id="groupsModal" class="modal">
+        <div class="modal-content groups-modal-content">
+            <button class="close-btn" onclick="closeModal('groupsModal')">&times;</button>
+            <div class="modal-header">Группы сессии</div>
+            <div id="groupsContainer"></div>
+        </div>
+    </div>
+
+    <!-- Add Bot Modal -->
+    <div id="addBotModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal('addBotModal')">&times;</button>
+            <div class="modal-header">Добавить нового бота</div>
+            <div class="form-group">
+                <label>Название бота:</label>
+                <input type="text" id="botNameInput" placeholder="Например: Бот 1">
+            </div>
+            <div class="form-group">
+                <label>URL или порт:</label>
+                <input type="text" id="botUrlInput" placeholder="http://localhost:3001 или 3001">
+            </div>
+            <div class="form-group">
+                <label>Описание (необязательно):</label>
+                <input type="text" id="botDescriptionInput" placeholder="Описание бота">
+            </div>
+            <button class="btn btn-primary" onclick="addBot()">Добавить</button>
+        </div>
+    </div>
+
+    <!-- Manual Groups Modal -->
+    <div id="manualGroupsModal" class="modal">
+        <div class="modal-content groups-modal-content">
+            <button class="close-btn" onclick="closeModal('manualGroupsModal')">&times;</button>
+            <div class="modal-header">
+                ➕ Группы для вступления
+                <div style="font-size: 14px; color: #666; margin-top: 5px; font-weight: normal;" id="manualGroupsSessionName"></div>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Добавить ссылку на группу:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="manualGroupLinkInput" placeholder="https://chat.whatsapp.com/..." style="flex: 1;">
+                        <button class="btn btn-primary btn-small" onclick="addManualGroup()">Добавить</button>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="addAllManualGroupsToQueue()" style="width: 100%; margin-bottom: 10px;">
+                    🚀 Добавить все группы в очередь вступлений
+                </button>
+            </div>
+            <div id="manualGroupsContainer" style="max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+        </div>
+    </div>
+
+    <!-- Notifications History Modal -->
+    <div id="notificationsHistoryModal" class="modal">
+        <div class="modal-content groups-modal-content">
+            <button class="close-btn" onclick="closeModal('notificationsHistoryModal')">&times;</button>
+            <div class="modal-header">
+                🔔 История уведомлений
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-small btn-secondary" onclick="filterNotifications('all')" id="filterAll">Все</button>
+                    <button class="btn btn-small btn-secondary" onclick="filterNotifications('new_link')" id="filterNewLink">Новые ссылки</button>
+                    <button class="btn btn-small btn-secondary" onclick="filterNotifications('join_result')" id="filterJoinResult">Вступления</button>
+                    <button class="btn btn-small btn-secondary" onclick="filterNotifications('session_created')" id="filterSessionCreated">Создание сессий</button>
+                    <button class="btn btn-small btn-danger" onclick="clearNotificationsHistory()" style="margin-left: auto;">🗑️ Очистить</button>
+                </div>
+            </div>
+            <div id="notificationsHistoryContainer" style="max-height: 60vh; overflow-y: auto; margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let currentPage = 1;
+        let currentQRSession = null;
+        let notificationsHistory = [];
+        let currentFilter = 'all';
+        let currentBot = 'default';
+        let botsList = [];
+        const API_BASE = ''; // Будет меняться при переключении бота
+
+        // Загружаем список ботов из localStorage
+        function loadBotsList() {
+            try {
+                const saved = localStorage.getItem('botsList');
+                if (saved) {
+                    botsList = JSON.parse(saved);
+                    updateBotSelector();
+                } else {
+                    // По умолчанию только основной бот
+                    botsList = [{
+                        id: 'default',
+                        name: 'Основной бот',
+                        url: window.location.origin,
+                        description: 'Основной бот (localhost:3000)'
+                    }];
+                    saveBotsList();
+                    updateBotSelector();
+                }
+            } catch (e) {
+                console.error('Error loading bots list:', e);
+                botsList = [{
+                    id: 'default',
+                    name: 'Основной бот',
+                    url: window.location.origin,
+                    description: 'Основной бот (localhost:3000)'
+                }];
+                updateBotSelector();
+            }
+        }
+
+        function saveBotsList() {
+            try {
+                localStorage.setItem('botsList', JSON.stringify(botsList));
+            } catch (e) {
+                console.error('Error saving bots list:', e);
+            }
+        }
+
+        function updateBotSelector() {
+            const select = document.getElementById('botSelect');
+            if (!select) return;
+            
+            select.innerHTML = botsList.map(bot => 
+                `<option value="${bot.id}" ${bot.id === currentBot ? 'selected' : ''}>${bot.name}${bot.description ? ' - ' + bot.description : ''}</option>`
+            ).join('');
+        }
+
+        function getCurrentBotUrl() {
+            const bot = botsList.find(b => b.id === currentBot);
+            if (!bot) return window.location.origin;
+            return bot.url;
+        }
+
+        function switchBot() {
+            const select = document.getElementById('botSelect');
+            const newBotId = select.value;
+            
+            if (newBotId === currentBot) return;
+            
+            currentBot = newBotId;
+            localStorage.setItem('currentBot', currentBot);
+            
+            // Переподключаемся к новому боту
+            reconnectToBot();
+        }
+
+        function reconnectToBot() {
+            // Закрываем старое соединение
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            
+            const botUrl = getCurrentBotUrl();
+            console.log(`[BOT_SWITCH] Переключаюсь на бота: ${botUrl}`);
+            
+            // Подключаемся к новому боту
+            socket = io(botUrl);
+            setupSocketHandlers();
+            
+            // Перезагружаем данные
+            loadSessions();
+            loadNotificationsHistory();
+        }
+
+        function setupSocketHandlers() {
+            if (!socket) return;
+            
+            socket.on('connect', () => {
+                console.log('Connected to bot:', getCurrentBotUrl());
+                loadSessions();
+            });
+
+            socket.on('session_status', (data) => {
+                console.log('Session status update:', data);
+                loadSessions();
+                
+                if (data.status === 'active' && currentQRSession === data.name) {
+                    const container = document.getElementById('qrContainer');
+                    container.innerHTML = '<div class="loading">✅ Сессия активирована!</div>';
+                    setTimeout(() => {
+                        closeModal('qrModal');
+                    }, 2000);
+                }
+            });
+
+            socket.on('session_update', (data) => {
+                console.log('Session update:', data);
+                loadSessions();
+            });
+
+            socket.on('session_deleted', (data) => {
+                console.log('Session deleted:', data);
+                loadSessions();
+            });
+
+            socket.on('qr_code', (data) => {
+                console.log('QR code received:', data.name);
+                if (currentQRSession === data.name) {
+                    const container = document.getElementById('qrContainer');
+                    container.innerHTML = `
+                        <div style="text-align: center;">
+                            <img src="${data.qr}" alt="QR Code" style="max-width: 100%; border-radius: 10px; margin-bottom: 15px;">
+                            <p style="color: #666; font-size: 14px;">
+                                Отсканируйте QR код в WhatsApp<br>
+                                Осталось: <span id="qrTimeout">${data.timeout}</span> сек
+                            </p>
+                        </div>
+                    `;
+                    
+                    let timeout = data.timeout;
+                    const timeoutInterval = setInterval(() => {
+                        timeout--;
+                        const timeoutEl = document.getElementById('qrTimeout');
+                        if (timeoutEl) {
+                            timeoutEl.textContent = timeout;
+                        }
+                        if (timeout <= 0) {
+                            clearInterval(timeoutInterval);
+                        }
+                    }, 1000);
+                }
+            });
+
+            socket.on('pairing_code', (data) => {
+                console.log('Pairing code received:', data.name);
+                if (currentQRSession === data.name) {
+                    const container = document.getElementById('qrContainer');
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 20px;">
+                            <div style="font-size: 48px; margin-bottom: 20px;">🔢</div>
+                            <h3 style="margin-bottom: 15px;">Пэйринг-код</h3>
+                            <div style="font-size: 32px; font-weight: bold; color: #667eea; margin-bottom: 20px; font-family: monospace;">
+                                ${data.code}
+                            </div>
+                            <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                                Откройте WhatsApp на телефоне:<br>
+                                Связанные устройства → Привязать устройство → Ввести код
+                            </p>
+                            <p style="color: #999; font-size: 12px;">
+                                Осталось: <span id="pairingTimeout">${data.timeout}</span> сек
+                            </p>
+                        </div>
+                    `;
+                    
+                    let timeout = data.timeout;
+                    const timeoutInterval = setInterval(() => {
+                        timeout--;
+                        const timeoutEl = document.getElementById('pairingTimeout');
+                        if (timeoutEl) {
+                            timeoutEl.textContent = timeout;
+                        }
+                        if (timeout <= 0) {
+                            clearInterval(timeoutInterval);
+                        }
+                    }, 1000);
+                }
+            });
+
+            socket.on('notification', (data) => {
+                console.log('Notification received:', data);
+                
+                notificationsHistory.unshift(data);
+                if (notificationsHistory.length > 500) {
+                    notificationsHistory = notificationsHistory.slice(0, 500);
+                }
+                
+                updateNotificationsBadge();
+                showNotification(data);
+                
+                if (document.getElementById('notificationsHistoryModal').classList.contains('active')) {
+                    renderNotificationsHistory();
+                }
+            });
+
+            socket.on('notifications_cleared', () => {
+                notificationsHistory = [];
+                updateNotificationsBadge();
+                if (document.getElementById('notificationsHistoryModal').classList.contains('active')) {
+                    renderNotificationsHistory();
+                }
+            });
+        }
+
+        function showAddBotModal() {
+            showModal('addBotModal');
+        }
+
+        function addBot() {
+            const name = document.getElementById('botNameInput').value.trim();
+            let url = document.getElementById('botUrlInput').value.trim();
+            const description = document.getElementById('botDescriptionInput').value.trim();
+            
+            if (!name) {
+                alert('Введите название бота');
+                return;
+            }
+            
+            if (!url) {
+                alert('Введите URL или порт');
+                return;
+            }
+            
+            // Если введен только порт, формируем URL
+            if (/^\d+$/.test(url)) {
+                url = `http://localhost:${url}`;
+            } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = `http://${url}`;
+            }
+            
+            const newBot = {
+                id: `bot_${Date.now()}_${Math.random().toString(36).slice(2,9)}`,
+                name,
+                url,
+                description
+            };
+            
+            botsList.push(newBot);
+            saveBotsList();
+            updateBotSelector();
+            
+            closeModal('addBotModal');
+            document.getElementById('botNameInput').value = '';
+            document.getElementById('botUrlInput').value = '';
+            document.getElementById('botDescriptionInput').value = '';
+            
+            alert(`Бот "${name}" добавлен!`);
+        }
+
+        let currentManualGroupsSession = null;
+
+        async function showManualGroups(sessionName) {
+            currentManualGroupsSession = sessionName;
+            showModal('manualGroupsModal');
+            document.getElementById('manualGroupsSessionName').textContent = `Сессия: ${sessionName}`;
+            await loadManualGroups(sessionName);
+        }
+
+        async function loadManualGroups(sessionName) {
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${sessionName}/manual-groups`);
+                const data = await res.json();
+                
+                const container = document.getElementById('manualGroupsContainer');
+                
+                if (data.groups.length === 0) {
+                    container.innerHTML = '<div class="empty-notifications">Нет добавленных групп</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.groups.map((group, index) => {
+                    const addedBadge = group.added ? '<span style="background: #27ae60; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 10px;">В очереди</span>' : '';
+                    return `
+                        <div class="group-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                            <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div class="group-name">${index + 1}. ${group.link}</div>
+                                    <div class="group-size" style="margin-top: 5px;">
+                                        ${group.type === 'whatsapp' ? '📱' : '📲'} ${group.type === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
+                                        • Добавлено: ${new Date(group.addedAt).toLocaleString('ru-RU')}
+                                        ${addedBadge}
+                                    </div>
+                                </div>
+                                <button class="btn btn-danger btn-small" onclick="removeManualGroup('${sessionName}', '${group.link}')" style="padding: 6px 12px;">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                const container = document.getElementById('manualGroupsContainer');
+                container.innerHTML = `<div class="empty-notifications" style="color: #e74c3c;">Ошибка загрузки: ${e.message}</div>`;
+            }
+        }
+
+        async function addManualGroup() {
+            const link = document.getElementById('manualGroupLinkInput').value.trim();
+            if (!link) {
+                alert('Введите ссылку на группу');
+                return;
+            }
+            
+            if (!link.match(/https?:\/\/(?:chat\.whatsapp\.com|t\.me)\/[A-Za-z0-9_-]+/)) {
+                alert('Неверный формат ссылки. Используйте ссылки вида:\nhttps://chat.whatsapp.com/...\nили\nhttps://t.me/...');
+                return;
+            }
+            
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${currentManualGroupsSession}/manual-groups`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ link })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('manualGroupLinkInput').value = '';
+                    await loadManualGroups(currentManualGroupsSession);
+                } else {
+                    const data = await res.json();
+                    alert('Ошибка: ' + (data.error || 'Не удалось добавить группу'));
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
+        }
+
+        async function removeManualGroup(sessionName, link) {
+            if (!confirm(`Удалить группу из списка?\n${link}`)) return;
+            
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${sessionName}/manual-groups`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ link })
+                });
+                
+                if (res.ok) {
+                    await loadManualGroups(sessionName);
+                } else {
+                    const data = await res.json();
+                    alert('Ошибка: ' + (data.error || 'Не удалось удалить группу'));
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
+        }
+
+        async function addAllManualGroupsToQueue() {
+            if (!currentManualGroupsSession) return;
+            
+            if (sessionStatus.get(currentManualGroupsSession) !== 'active') {
+                alert('Сессия должна быть активна для добавления в очередь');
+                return;
+            }
+            
+            if (!confirm('Добавить все группы из списка в очередь вступлений?')) return;
+            
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${currentManualGroupsSession}/manual-groups/add-to-queue`, {
+                    method: 'POST'
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`✅ Добавлено ${data.added} групп в очередь вступлений`);
+                    await loadManualGroups(currentManualGroupsSession);
+                    loadSessions(); // Обновляем список сессий
+                } else {
+                    const errorData = await res.json();
+                    alert('Ошибка: ' + (errorData.error || 'Не удалось добавить в очередь'));
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
+        }
+
+        // Инициализация при загрузке
+        loadBotsList();
+        
+        // Загружаем выбранного бота
+        const savedBot = localStorage.getItem('currentBot');
+        if (savedBot && botsList.find(b => b.id === savedBot)) {
+            currentBot = savedBot;
+        }
+        
+        // Подключаемся к боту
+        socket = io(getCurrentBotUrl());
+        setupSocketHandlers();
+
+        // Загружаем историю с сервера (общая для всех)
+        async function loadNotificationsHistory() {
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/notifications?limit=500`);
+                const data = await res.json();
+                notificationsHistory = data.notifications || [];
+                updateNotificationsBadge();
+            } catch (e) {
+                console.error('Error loading notifications history:', e);
+                notificationsHistory = [];
+                updateNotificationsBadge();
+            }
+        }
+
+        // Загружаем при старте
+        loadNotificationsHistory();
+
+        // Socket handlers теперь в setupSocketHandlers()
+
+        function showNotification(data) {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `notification ${data.success !== undefined ? (data.success ? 'success' : 'error') : 'info'}`;
+            
+            let icon = 'ℹ️';
+            if (data.type === 'new_link') icon = data.icon || '📱';
+            else if (data.type === 'join_result') icon = data.icon || (data.success ? '✅' : '❌');
+            else if (data.type === 'session_created') icon = '🟢';
+            
+            // Форматируем сообщение для лучшего отображения
+            let messageText = data.message || data.text || '';
+            if (data.type === 'new_link') {
+                messageText = `🔗 ${data.link}\n⏱️ Время ожидания: ${data.estimatedWaitTime} сек.\n🤖 Сессия: ${data.sessionId}`;
+                if (data.queueText) {
+                    messageText += `\n📋 ${data.queueText}`;
+                }
+            } else if (data.type === 'join_result') {
+                messageText = `🔗 ${data.link}\n🤖 Сессия: ${data.sessionId}`;
+                if (data.error) {
+                    messageText += `\n🚨 Ошибка: ${data.error}`;
+                }
+            }
+            
+            notification.innerHTML = `
+                <div class="notification-icon">${icon}</div>
+                <div class="notification-content">
+                    <div class="notification-title">${getNotificationTitle(data)}</div>
+                    <div class="notification-message">${messageText}</div>
+                </div>
+                <button class="notification-close" onclick="this.parentElement.remove()">&times;</button>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Прокручиваем контейнер, чтобы новая уведомление была видна
+            container.scrollTop = container.scrollHeight;
+            
+            // Auto remove after 15 seconds (увеличено для важных уведомлений)
+            const autoRemoveTime = data.type === 'join_result' ? 15000 : 10000;
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => notification.remove(), 300);
+                }
+            }, autoRemoveTime);
+        }
+
+        function getNotificationTitle(data) {
+            if (data.type === 'new_link') return 'Новая ссылка найдена';
+            if (data.type === 'join_result') return data.success ? 'Успешное вступление' : 'Ошибка вступления';
+            if (data.type === 'session_created') return 'Сессия создана';
+            return 'Уведомление';
+        }
+
+
+        function renderNotificationsHistory() {
+            const container = document.getElementById('notificationsHistoryContainer');
+            
+            // Фильтруем уведомления
+            let filtered = notificationsHistory;
+            if (currentFilter !== 'all') {
+                filtered = notificationsHistory.filter(n => n.type === currentFilter);
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-notifications">Нет уведомлений</div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(item => {
+                let className = 'info';
+                if (item.type === 'join_result') {
+                    className = item.success ? 'success' : 'error';
+                } else if (item.type === 'new_link') {
+                    className = 'info';
+                } else if (item.type === 'session_created') {
+                    className = 'success';
+                }
+                
+                let message = item.message || '';
+                if (item.type === 'new_link' && item.link) {
+                    message = `🔗 <a href="${item.link}" target="_blank" class="notification-history-link">${item.link}</a>\n⏱️ Время ожидания: ${item.estimatedWaitTime || 0} сек.\n🤖 Сессия: ${item.sessionId || item.sessionName || 'неизвестно'}`;
+                    if (item.queueText || item.positionInQueue) {
+                        const queueInfo = item.queueText || `Позиция в очереди: ${item.positionInQueue}`;
+                        message += `\n📋 ${queueInfo}`;
+                    }
+                } else if (item.type === 'join_result' && item.link) {
+                    message = `🔗 <a href="${item.link}" target="_blank" class="notification-history-link">${item.link}</a>\n🤖 Сессия: ${item.sessionId || 'неизвестно'}`;
+                    if (item.error) {
+                        message += `\n🚨 Ошибка: ${item.error}`;
+                    }
+                } else if (item.type === 'session_created') {
+                    message = item.message || `🟢 Сессия "${item.sessionName || 'неизвестно'}" успешно создана и активна!`;
+                }
+                
+                return `
+                    <div class="notification-history-item ${className}">
+                        <div class="notification-history-header">
+                            <div class="notification-history-type">${getNotificationTypeLabel(item.type)}</div>
+                            <div class="notification-history-time">${item.displayTime || new Date(item.timestamp || Date.now()).toLocaleString('ru-RU')}</div>
+                        </div>
+                        <div class="notification-history-message">${message}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getNotificationTypeLabel(type) {
+            const labels = {
+                'new_link': '📱 Новая ссылка',
+                'join_result': '✅ Вступление',
+                'session_created': '🟢 Создание сессии'
+            };
+            return labels[type] || 'Уведомление';
+        }
+
+        function filterNotifications(filter) {
+            currentFilter = filter;
+            
+            // Обновляем активные кнопки
+            document.querySelectorAll('[id^="filter"]').forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            
+            const activeBtn = document.getElementById(`filter${filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('btn-secondary');
+                activeBtn.classList.add('btn-primary');
+            }
+            
+            renderNotificationsHistory();
+        }
+
+        async function clearNotificationsHistory() {
+            if (confirm('Очистить всю историю уведомлений для всех пользователей?')) {
+                try {
+                    const botUrl = getCurrentBotUrl();
+                    const res = await fetch(`${botUrl}/api/notifications`, { method: 'DELETE' });
+                    if (res.ok) {
+                        notificationsHistory = [];
+                        updateNotificationsBadge();
+                        renderNotificationsHistory();
+                    } else {
+                        alert('Ошибка при очистке истории');
+                    }
+                } catch (e) {
+                    alert('Ошибка: ' + e.message);
+                }
+            }
+        }
+
+        function updateNotificationsBadge() {
+            const badge = document.getElementById('notificationsBadge');
+            if (notificationsHistory.length > 0) {
+                badge.textContent = notificationsHistory.length > 99 ? '99+' : notificationsHistory.length;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // Инициализация при загрузке
+        loadNotificationsHistory();
+        
+        // Также загружаем историю при открытии окна (на случай, если были пропущены уведомления)
+        async function showNotificationsHistory() {
+            await loadNotificationsHistory(); // Перезагружаем с сервера
+            showModal('notificationsHistoryModal');
+            renderNotificationsHistory();
+        }
+
+        let sessionStatus = new Map(); // Локальное хранилище статусов сессий
+
+        async function loadSessions() {
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions`);
+                const sessions = await res.json();
+                
+                // Сохраняем статусы сессий
+                sessions.forEach(s => {
+                    sessionStatus.set(s.name, s.status);
+                });
+                
+                updateStats(sessions);
+                renderSessions(sessions);
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                alert('Ошибка подключения к боту. Проверьте URL и доступность бота.');
+            }
+        }
+
+        function updateStats(sessions) {
+            document.getElementById('totalSessions').textContent = sessions.length;
+            document.getElementById('activeSessions').textContent = 
+                sessions.filter(s => s.status === 'active').length;
+            
+            const totalQueue = sessions.reduce((sum, s) => sum + s.queueLength, 0);
+            document.getElementById('totalQueue').textContent = totalQueue;
+        }
+
+        function renderSessions(sessions) {
+            const container = document.getElementById('sessionsContainer');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<div class="loading">Нет сессий. Создайте первую сессию!</div>';
+                return;
+            }
+
+            container.innerHTML = sessions.map(session => `
+                <div class="session-card">
+                    <div class="session-header">
+                        <div class="session-name">${session.name}</div>
+                        <div class="status-badge status-${session.status}">${session.statusText}</div>
+                    </div>
+                    <div class="session-info">
+                        <div class="session-info-item">
+                            <span>Очередь вступлений:</span>
+                            <strong>${session.queueLength}</strong>
+                        </div>
+                        <div class="session-info-item">
+                            <span>Интервалы:</span>
+                            <strong>${session.intervals.min}-${session.intervals.max} сек</strong>
+                        </div>
+                        ${session.lastJoin ? `
+                        <div class="session-info-item">
+                            <span>Последнее вступление:</span>
+                            <strong>${formatTime(session.lastJoin.timestamp)}</strong>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="session-actions">
+                        ${session.status !== 'active' && session.status !== 'syncing' ? `
+                            <button class="btn btn-primary btn-small" onclick="activateSession('${session.name}')">
+                                🔄 Активировать
+                            </button>
+                            <button class="btn btn-secondary btn-small" onclick="newQR('${session.name}')">
+                                🔁 Новый QR
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="viewGroups('${session.name}')">
+                            👥 Группы
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="showManualGroups('${session.name}')">
+                            ➕ Группы для вступления
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="editIntervals('${session.name}', ${session.intervals.min}, ${session.intervals.max})">
+                            ⏱️ Интервалы
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="deleteSession('${session.name}')">
+                            🗑️ Удалить
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatTime(timestamp) {
+            const diff = Date.now() - timestamp;
+            const minutes = Math.floor(diff / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            return `${minutes}м ${seconds}с назад`;
+        }
+
+        async function createSession() {
+            const name = document.getElementById('sessionNameInput').value.trim();
+            if (!name) {
+                alert('Введите имя сессии');
+                return;
+            }
+
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                if (res.ok) {
+                    closeModal('addSessionModal');
+                    document.getElementById('sessionNameInput').value = '';
+                    loadSessions();
+                    setTimeout(() => {
+                        newQR(name);
+                    }, 1000);
+                } else {
+                    const data = await res.json();
+                    alert('Ошибка: ' + data.error);
+                }
+            } catch (e) {
+                alert('Ошибка создания сессии: ' + e.message);
+            }
+        }
+
+        async function activateSession(name) {
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${name}/activate`, { method: 'POST' });
+                if (res.ok) {
+                    loadSessions();
+                    setTimeout(() => {
+                        newQR(name);
+                    }, 1000);
+                } else {
+                    alert('Ошибка активации');
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
+        }
+
+        async function newQR(name) {
+            currentQRSession = name;
+            showModal('qrModal');
+            const container = document.getElementById('qrContainer');
+            container.innerHTML = '<div class="loading">Генерация QR кода...</div>';
+
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${name}/newqr`, { method: 'POST' });
+                if (res.ok) {
+                    // Wait for QR code via WebSocket
+                    setTimeout(() => {
+                        if (container.innerHTML.includes('Генерация QR кода')) {
+                            container.innerHTML = '<div class="loading">Ожидание QR кода... Проверьте статус сессии.</div>';
+                        }
+                    }, 5000);
+                } else {
+                    container.innerHTML = '<div class="loading">Ошибка генерации QR</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div class="loading">Ошибка: ' + e.message + '</div>';
+            }
+        }
+
+
+        async function viewGroups(name) {
+            try {
+                showModal('groupsModal');
+                const container = document.getElementById('groupsContainer');
+                container.innerHTML = '<div class="loading">Загрузка групп...</div>';
+                
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${name}/groups`);
+                const data = await res.json();
+                
+                // Проверяем, есть ли ошибка в ответе
+                if (data.error) {
+                    container.innerHTML = `<div class="loading" style="color: #e74c3c;">Ошибка: ${data.error}</div>`;
+                    return;
+                }
+                
+                // Убеждаемся, что data - это массив
+                const groups = Array.isArray(data) ? data : [];
+                
+                if (groups.length === 0) {
+                    container.innerHTML = '<div class="loading">Нет групп. Убедитесь, что сессия активна.</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div style="margin-bottom: 15px; color: #666; font-size: 14px;">
+                        Всего групп: <strong>${groups.length}</strong>
+                    </div>
+                    ${groups.map((g, i) => `
+                        <div class="group-item">
+                            <div>
+                                <div class="group-name">${i+1}. ${g.subject || '(без названия)'}</div>
+                                <div class="group-size">👥 ${g.size || 0} участников</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            } catch (e) {
+                const container = document.getElementById('groupsContainer');
+                container.innerHTML = `<div class="loading" style="color: #e74c3c;">Ошибка загрузки групп: ${e.message}</div>`;
+            }
+        }
+
+        function editIntervals(name, currentMin, currentMax) {
+            const min = prompt('Минимальный интервал (секунды):', currentMin);
+            const max = prompt('Максимальный интервал (секунды):', currentMax);
+            
+            if (min && max) {
+                const botUrl = getCurrentBotUrl();
+                fetch(`${botUrl}/api/sessions/${name}/intervals`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ min: parseInt(min), max: parseInt(max) })
+                }).then(() => loadSessions());
+            }
+        }
+
+        async function deleteSession(name) {
+            if (!confirm(`Удалить сессию "${name}"?`)) return;
+
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/sessions/${name}`, { method: 'DELETE' });
+                if (res.ok) {
+                    loadSessions();
+                } else {
+                    alert('Ошибка удаления');
+                }
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+            }
+        }
+
+        async function loadLinks(page = 1) {
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/links?page=${page}`);
+                const data = await res.json();
+                
+                document.getElementById('totalLinks').textContent = data.total;
+                
+                showModal('linksModal');
+                const container = document.getElementById('linksContainer');
+                
+                if (data.links.length === 0) {
+                    container.innerHTML = '<div class="loading">Нет ссылок</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="links-list">
+                        ${data.links.map(link => `
+                            <div class="link-item">
+                                <div>
+                                    <div class="link-url">${link.url}</div>
+                                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                                        ${link.sessionId} • ${new Date(link.addedAt).toLocaleString('ru-RU')}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                // Pagination
+                const pagination = document.getElementById('linksPagination');
+                if (data.pages > 1) {
+                    pagination.innerHTML = `
+                        ${data.page > 1 ? `<button class="btn btn-secondary btn-small" onclick="loadLinks(${data.page - 1})">⬅️</button>` : ''}
+                        <span>Страница ${data.page} из ${data.pages}</span>
+                        ${data.page < data.pages ? `<button class="btn btn-secondary btn-small" onclick="loadLinks(${data.page + 1})">➡️</button>` : ''}
+                    `;
+                } else {
+                    pagination.innerHTML = '';
+                }
+            } catch (e) {
+                alert('Ошибка загрузки ссылок: ' + e.message);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const botUrl = getCurrentBotUrl();
+                const res = await fetch(`${botUrl}/api/users`);
+                const users = await res.json();
+                
+                showModal('usersModal');
+                const container = document.getElementById('usersContainer');
+                
+                if (users.length === 0) {
+                    container.innerHTML = '<div class="loading">Нет пользователей</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="links-list">
+                        ${users.map(user => `
+                            <div class="link-item">
+                                <div>
+                                    <strong>${user.firstName || user.username || `User${user.id}`}</strong>
+                                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                                        @${user.username || 'no_username'} • ${new Date(user.lastSeen).toLocaleString('ru-RU')}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (e) {
+                alert('Ошибка загрузки пользователей: ' + e.message);
+            }
+        }
+
+        function showAddSessionModal() {
+            showModal('addSessionModal');
+        }
+
+        function showModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            if (id === 'qrModal') {
+                currentQRSession = null;
+            }
+        }
+
+        // Close modal on outside click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        // Auto-refresh every 5 seconds
+        setInterval(loadSessions, 5000);
+    </script>
+</body>
+</html>
+
