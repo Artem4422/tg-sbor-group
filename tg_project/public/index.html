@@ -347,6 +347,75 @@
       font-size: 10px;
       padding: 0 5px;
     }
+    .notif-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+    .notif-panel {
+      width: 100%;
+      max-width: 720px;
+      max-height: 480px;
+      background: radial-gradient(circle at top, rgba(148,163,184,0.18), transparent 55%), #020617;
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.5);
+      box-shadow: 0 30px 80px rgba(15,23,42,0.95);
+      padding: 14px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .notif-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .notif-list {
+      flex: 1;
+      overflow: auto;
+      padding-right: 4px;
+      font-size: 12px;
+    }
+    .notif-item {
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(31,41,55,0.9);
+      background: radial-gradient(circle at top left, rgba(15,118,110,0.35), rgba(15,23,42,0.95));
+      margin-bottom: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .notif-item.error {
+      background: radial-gradient(circle at top left, rgba(248,113,113,0.28), rgba(15,23,42,0.96));
+      border-color: rgba(127,29,29,0.9);
+    }
+    .notif-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .notif-link {
+      color: #bfdbfe;
+      word-break: break-all;
+    }
+    .notif-meta {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
@@ -380,6 +449,12 @@
 
         <div id="sessions" class="sessions-grid">
           <!-- Sessions will be rendered here -->
+        </div>
+
+        <div style="margin-top:8px; display:flex; justify-content:flex-end;">
+          <button id="openNotifications" class="btn btn-ghost btn-sm">
+            <span>🔔 Уведомления</span>
+          </button>
         </div>
       </div>
     </main>
@@ -455,6 +530,19 @@
     </aside>
   </div>
 
+  <div id="notifOverlay" class="notif-overlay">
+    <div class="notif-panel">
+      <div class="notif-header">
+        <span>Уведомления вступлений</span>
+        <div style="display:flex; gap:6px;">
+          <button id="clearNotifications" class="btn btn-sm btn-ghost">🧹 Очистить</button>
+          <button id="closeNotifications" class="btn btn-sm btn-danger">✕ Закрыть</button>
+        </div>
+      </div>
+      <div id="notifList" class="notif-list"></div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionsContainer = document.getElementById('sessions');
@@ -466,6 +554,9 @@
     const confirmCodeBtn = document.getElementById('confirmCode');
     const joinGroupBtn = document.getElementById('joinGroup');
       const saveIntervalsBtn = document.getElementById('saveIntervals');
+      const openNotificationsBtn = document.getElementById('openNotifications');
+      const closeNotificationsBtn = document.getElementById('closeNotifications');
+      const clearNotificationsBtn = document.getElementById('clearNotifications');
 
     const sessionNameInput = document.getElementById('sessionName');
     const phoneInput = document.getElementById('phone');
@@ -473,8 +564,11 @@
     const joinLinkInput = document.getElementById('joinLink');
       const intervalMinInput = document.getElementById('intervalMin');
       const intervalMaxInput = document.getElementById('intervalMax');
+      const notifOverlay = document.getElementById('notifOverlay');
+      const notifList = document.getElementById('notifList');
 
     let lastCreatedSession = null;
+    let lastNotifications = [];
 
     function log(message, type = 'info') {
       const line = document.createElement('div');
@@ -502,6 +596,52 @@
         case 'inactive':
         default: return 'Не активна';
       }
+    }
+
+    function renderNotifications() {
+      notifList.innerHTML = '';
+      if (!lastNotifications.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'Пока нет уведомлений.';
+        empty.style.color = '#9ca3af';
+        notifList.appendChild(empty);
+        return;
+      }
+      lastNotifications.forEach((n) => {
+        const item = document.createElement('div');
+        item.className = 'notif-item' + (n.success ? '' : ' error');
+        const top = document.createElement('div');
+        top.className = 'notif-top';
+        const title = document.createElement('div');
+        title.textContent = n.success ? '✅ Успешное вступление' : '❌ Ошибка вступления';
+        const time = document.createElement('div');
+        const d = new Date(n.at);
+        time.textContent = d.toLocaleTimeString('ru-RU', { hour12: false }) + ' ' + d.toLocaleDateString('ru-RU');
+        time.style.fontSize = '11px';
+        time.style.color = '#9ca3af';
+        top.appendChild(title);
+        top.appendChild(time);
+        item.appendChild(top);
+
+        const link = document.createElement('div');
+        link.className = 'notif-link';
+        link.textContent = n.link;
+        item.appendChild(link);
+
+        const meta = document.createElement('div');
+        meta.className = 'notif-meta';
+        const s = document.createElement('span');
+        s.textContent = 'Сессия: ' + n.session;
+        meta.appendChild(s);
+        if (!n.success && n.error) {
+          const err = document.createElement('span');
+          err.textContent = 'Ошибка: ' + n.error;
+          meta.appendChild(err);
+        }
+        item.appendChild(meta);
+
+        notifList.appendChild(item);
+      });
     }
 
     function renderSessions(sessions) {
@@ -557,6 +697,16 @@
           it.className = 'meta-pill';
           it.textContent = `⏱ ${s.intervals.min}-${s.intervals.max} сек`;
           meta.appendChild(it);
+        }
+        if (s.lastJoin && s.lastJoin.link && s.lastJoin.at) {
+          const lj = document.createElement('span');
+          lj.className = 'meta-pill';
+          const d = new Date(s.lastJoin.at);
+          const t = d.toLocaleTimeString('ru-RU', { hour12: false });
+          const day = d.toLocaleDateString('ru-RU');
+          lj.textContent = `🔗 Последнее: ${t} ${day}`;
+          lj.title = `Вступление по ссылке:\n${s.lastJoin.link}`;
+          meta.appendChild(lj);
         }
         left.appendChild(meta);
 
@@ -753,6 +903,35 @@
         await loadSessions();
       } catch (e) {
         log('Ошибка сохранения интервалов: ' + e.message, 'error');
+      }
+    };
+
+    openNotificationsBtn.onclick = async () => {
+      try {
+        const res = await fetch('/api/tg/notifications?limit=200');
+        const data = await res.json();
+        lastNotifications = data.notifications || [];
+        renderNotifications();
+        notifOverlay.style.display = 'flex';
+      } catch (e) {
+        log('Ошибка загрузки уведомлений: ' + e.message, 'error');
+      }
+    };
+
+    closeNotificationsBtn.onclick = () => {
+      notifOverlay.style.display = 'none';
+    };
+
+    clearNotificationsBtn.onclick = async () => {
+      try {
+        const res = await fetch('/api/tg/notifications', { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка очистки');
+        lastNotifications = [];
+        renderNotifications();
+        log('Уведомления очищены', 'success');
+      } catch (e) {
+        log('Ошибка очистки уведомлений: ' + e.message, 'error');
       }
     };
 

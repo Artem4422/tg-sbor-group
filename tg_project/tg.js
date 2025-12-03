@@ -30,9 +30,21 @@ fs.mkdirSync(TG_SESSIONS_DIR, { recursive: true });
 const tgClients = new Map();          // name -> TelegramClient
 const tgSessionStatus = new Map();    // name -> 'inactive' | 'auth' | 'active' | 'error'
 const tgSessionMeta = new Map();      // name -> { phone }
-const tgJoinQueue = new Map();        // name -> [{ link, timestamp, status }]
+const tgJoinQueue = new Map();        // name -> [{ link, timestamp }]
 const processingJoin = new Map();     // name -> boolean
 const tgSessionIntervals = new Map(); // name -> { min, max } (сек)
+const tgBadLinks = new Set();         // ссылки, по которым уже была "фатальная" ошибка
+const tgJoinedLinks = new Set();      // ссылки, в которые уже успешно вошли
+const tgLastJoin = new Map();         // name -> { link, at }
+const tgNotifications = [];           // [{ session, link, success, error, at }]
+const TG_NOTIF_LIMIT = 500;
+
+const pushNotification = (payload) => {
+  tgNotifications.unshift({ ...payload, id: Date.now() + Math.random() });
+  if (tgNotifications.length > TG_NOTIF_LIMIT) {
+    tgNotifications.length = TG_NOTIF_LIMIT;
+  }
+};
 
 // --- Вспомогательные функции ---
 const statusEmoji = (s) => ({
@@ -255,12 +267,30 @@ async function processJoinQueue(io, name) {
 
       const path = link.replace('https://t.me/', '').split('?')[0].split('/')[0];
 
-      if (path.startsWith('+') || /^[a-zA-Z0-9_-]+$/.test(path) === false) {
-        // пригласительная ссылка вида https://t.me/+xxxx
+      if (path.startsWith('+') || /^[a-zA-Z0-9_-]+$/.test(path) === false || link.includes('addlist/')) {
+        // пригласительная ссылка вида https://t.me/+xxxx или списки addlist
         const hash = path.replace(/^\+/, '');
         await client.invoke(new Api.messages.ImportChatInvite({ hash }));
       } else {
-        // публичная группа/канал @username
+        // публичная ссылка t.me/username — сначала проверяем, что это именно беседа, а не канал
+        try {
+          const resolved = await client.invoke(new Api.contacts.ResolveUsername({ username: path }));
+          const chat = (resolved.chats && resolved.chats[0]) || null;
+
+          if (!chat) {
+            throw new Error('RESOLVE_EMPTY');
+          }
+
+          // Api.Channel с megagroup=false — это обычный канал (broadcast), пропускаем
+          if (chat instanceof Api.Channel && !chat.megagroup) {
+            throw new Error('TARGET_IS_CHANNEL');
+          }
+        } catch (resolveErr) {
+          // Если не смогли разрезолвить или это канал — бросаем ошибку, она уйдет в общий catch ниже
+          throw resolveErr;
+        }
+
+        // Если это не канал, пробуем вступить как обычно
         await client.invoke(new Api.channels.JoinChannel({
           channel: link,
         })).catch(async () => {
@@ -271,8 +301,28 @@ async function processJoinQueue(io, name) {
       }
 
       console.log(`[TG_JOIN] ${name}: успешно вступил по ссылке ${link}`);
+      tgJoinedLinks.add(link);
+      tgLastJoin.set(name, { link, at: Date.now() });
+      pushNotification({ session: name, link, success: true, error: null, at: Date.now() });
     } catch (e) {
       console.error(`[TG_JOIN_ERROR] ${name}: ${link} - ${e.message}`);
+      pushNotification({ session: name, link, success: false, error: e.message, at: Date.now() });
+
+      const msg = (e.message || '').toLowerCase();
+      if (
+        msg.includes('user_already_participant') ||
+        msg.includes('username_invalid') ||
+        msg.includes('cannot cast inputpeeruser') ||
+        msg.includes('channel_invalid') ||
+        msg.includes('invite_hash_invalid') ||
+        msg.includes('invite_hash_expired') ||
+        msg.includes('target_is_channel') ||
+        msg.includes('resolve_empty')
+      ) {
+        // Помечаем ссылку как "бесполезную", чтобы больше не ставить её в очередь
+        tgBadLinks.add(link);
+        console.log(`[TG_JOIN_REMOVE] ${name}: ссылка больше не будет использоваться ${link}`);
+      }
     }
 
     await saveClientSession(name);
@@ -288,10 +338,23 @@ async function processJoinQueue(io, name) {
 }
 
 function addToJoinQueue(io, name, link) {
+  // Если по ссылке уже была фатальная ошибка или успешный вход — больше не трогаем
+  if (tgBadLinks.has(link) || tgJoinedLinks.has(link)) {
+    console.log(`[TG_QUEUE_SKIP] ${name}: ссылка уже помечена как обработанная ${link}`);
+    return;
+  }
+
   if (!tgJoinQueue.has(name)) {
     tgJoinQueue.set(name, []);
   }
   const queue = tgJoinQueue.get(name);
+
+  // Не кладём дубликаты в очередь
+  if (queue.some((t) => t.link === link)) {
+    console.log(`[TG_QUEUE_DUP] ${name}: ссылка уже есть в очереди ${link}`);
+    return;
+  }
+
   queue.push({ link, timestamp: Date.now() });
   io.emit('tg_join_queue_update', { name });
   processJoinQueue(io, name).catch(e => {
@@ -318,6 +381,7 @@ app.get('/api/tg/sessions', (req, res) => {
       phone: tgSessionMeta.get(name)?.phone || null,
       joinQueueLength: (tgJoinQueue.get(name)?.length) || 0,
       intervals: tgSessionIntervals.get(name) || { min: 5, max: 30 },
+      lastJoin: tgLastJoin.get(name) || null,
     }));
     res.json(result);
   } catch (e) {
@@ -397,6 +461,7 @@ app.get('/api/tg/sessions/:name', (req, res) => {
       phone: tgSessionMeta.get(name)?.phone || null,
       joinQueueLength: (tgJoinQueue.get(name)?.length) || 0,
       intervals: tgSessionIntervals.get(name) || { min: 5, max: 30 },
+      lastJoin: tgLastJoin.get(name) || null,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -470,6 +535,18 @@ app.put('/api/tg/sessions/:name/intervals', (req, res) => {
   });
 
   res.json({ success: true, intervals: { min: minNum, max: maxNum } });
+});
+
+// GET /api/tg/notifications?limit=100
+app.get('/api/tg/notifications', (req, res) => {
+  const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 100));
+  res.json({ notifications: tgNotifications.slice(0, limit) });
+});
+
+// DELETE /api/tg/notifications
+app.delete('/api/tg/notifications', (req, res) => {
+  tgNotifications.length = 0;
+  res.json({ success: true });
 });
 
 // WebSocket
