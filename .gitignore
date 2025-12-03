@@ -1,11 +1,11 @@
 vt_project/.env
 tg_project/.env
 
-vt_project/sessions/
-tg_project/tg_sessions/
-
 vt_project/node_modules/
 tg_project/node_modules/
+
+vt_project/sessions/
+tg_project/tg_sessions/
 
 .DS_Store
 Thumbs.db
