@@ -416,6 +416,67 @@
       gap: 10px;
       flex-wrap: wrap;
     }
+    .groups-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 45;
+    }
+    .groups-panel {
+      width: 100%;
+      max-width: 720px;
+      max-height: 480px;
+      background: radial-gradient(circle at top, rgba(148,163,184,0.18), transparent 55%), #020617;
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.5);
+      box-shadow: 0 30px 80px rgba(15,23,42,0.95);
+      padding: 14px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .groups-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .groups-list {
+      flex: 1;
+      overflow: auto;
+      padding-right: 4px;
+      font-size: 12px;
+    }
+    .group-item {
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(31,41,55,0.9);
+      background: radial-gradient(circle at top left, rgba(59,130,246,0.3), rgba(15,23,42,0.96));
+      margin-bottom: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .group-title-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .group-meta {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
@@ -543,6 +604,16 @@
     </div>
   </div>
 
+  <div id="groupsOverlay" class="groups-overlay">
+    <div class="groups-panel">
+      <div class="groups-header">
+        <span id="groupsTitle">Группы сессии</span>
+        <button id="closeGroups" class="btn btn-sm btn-danger">✕ Закрыть</button>
+      </div>
+      <div id="groupsList" class="groups-list"></div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionsContainer = document.getElementById('sessions');
@@ -557,6 +628,10 @@
       const openNotificationsBtn = document.getElementById('openNotifications');
       const closeNotificationsBtn = document.getElementById('closeNotifications');
       const clearNotificationsBtn = document.getElementById('clearNotifications');
+      const groupsOverlay = document.getElementById('groupsOverlay');
+      const groupsTitle = document.getElementById('groupsTitle');
+      const groupsList = document.getElementById('groupsList');
+      const closeGroupsBtn = document.getElementById('closeGroups');
 
     const sessionNameInput = document.getElementById('sessionName');
     const phoneInput = document.getElementById('phone');
@@ -569,6 +644,8 @@
 
     let lastCreatedSession = null;
     let lastNotifications = [];
+    let lastGroups = [];
+    let currentGroupsSession = null;
 
     function log(message, type = 'info') {
       const line = document.createElement('div');
@@ -586,6 +663,41 @@
       line.appendChild(span);
       logEl.appendChild(line);
       logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function renderGroups() {
+      groupsList.innerHTML = '';
+      if (!lastGroups.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'Группы не найдены или сессия не активна.';
+        empty.style.color = '#9ca3af';
+        groupsList.appendChild(empty);
+        return;
+      }
+      lastGroups.forEach((g) => {
+        const item = document.createElement('div');
+        item.className = 'group-item';
+
+        const top = document.createElement('div');
+        top.className = 'group-title-line';
+        const title = document.createElement('div');
+        title.textContent = g.title || '(без названия)';
+        const badge = document.createElement('span');
+        badge.className = 'badge-number';
+        badge.textContent = g.type === 'supergroup' ? 'SG' : 'CHAT';
+        top.appendChild(title);
+        top.appendChild(badge);
+        item.appendChild(top);
+
+        const meta = document.createElement('div');
+        meta.className = 'group-meta';
+        const idSpan = document.createElement('span');
+        idSpan.textContent = 'ID: ' + g.id;
+        meta.appendChild(idSpan);
+        item.appendChild(meta);
+
+        groupsList.appendChild(item);
+      });
     }
 
     function statusText(status) {
@@ -717,6 +829,26 @@
         joinBadge.className = 'badge-number';
         joinBadge.textContent = s.joinQueueLength || 0;
         right.appendChild(joinBadge);
+
+        const groupsBtn = document.createElement('button');
+        groupsBtn.className = 'btn btn-sm btn-ghost';
+        groupsBtn.textContent = '👥 Группы';
+        groupsBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          try {
+            const res = await fetch(`/api/tg/sessions/${encodeURIComponent(s.name)}/groups`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Ошибка загрузки групп');
+            currentGroupsSession = s.name;
+            lastGroups = data.groups || [];
+            groupsTitle.textContent = `Группы сессии: ${s.name}`;
+            renderGroups();
+            groupsOverlay.style.display = 'flex';
+          } catch (e) {
+            log('Ошибка загрузки групп: ' + e.message, 'error');
+          }
+        };
+        right.appendChild(groupsBtn);
 
         if (s.status !== 'active') {
           const actBtn = document.createElement('button');
@@ -933,6 +1065,10 @@
       } catch (e) {
         log('Ошибка очистки уведомлений: ' + e.message, 'error');
       }
+    };
+
+    closeGroupsBtn.onclick = () => {
+      groupsOverlay.style.display = 'none';
     };
 
     // WebSocket for live updates

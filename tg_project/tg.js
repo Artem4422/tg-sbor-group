@@ -514,6 +514,46 @@ app.post('/api/tg/sessions/:name/join', async (req, res) => {
   }
 });
 
+// GET /api/tg/sessions/:name/groups — список групп/чатов, где состоит аккаунт
+app.get('/api/tg/sessions/:name/groups', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const client = await getOrCreateClient(io, name);
+    await client.connect();
+
+    const dialogs = await client.getDialogs({});
+    const groups = [];
+
+    for (const d of dialogs) {
+      const ent = d.entity;
+      if (!ent) continue;
+
+      // Обычные групповые чаты
+      if (ent instanceof Api.Chat) {
+        groups.push({
+          id: String(ent.id),
+          title: ent.title || '(без названия)',
+          type: 'chat',
+        });
+        continue;
+      }
+
+      // Супергруппы (megagroup=true)
+      if (ent instanceof Api.Channel && ent.megagroup) {
+        groups.push({
+          id: String(ent.id),
+          title: ent.title || ent.username || '(без названия)',
+          type: 'supergroup',
+        });
+      }
+    }
+
+    res.json({ groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message, groups: [] });
+  }
+});
+
 // PUT /api/tg/sessions/:name/intervals { min, max }
 app.put('/api/tg/sessions/:name/intervals', (req, res) => {
   const { name } = req.params;
