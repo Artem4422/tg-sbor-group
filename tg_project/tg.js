@@ -38,6 +38,10 @@ const tgJoinedLinks = new Set();      // ссылки, в которые уже 
 const tgLastJoin = new Map();         // name -> { link, at }
 const tgNotifications = [];           // [{ session, link, success, error, at }]
 const TG_NOTIF_LIMIT = 500;
+const tgBroadcasts = new Map();       // broadcastId -> { sessionName, messageText, mediaType, mediaInfo, minInterval, maxInterval, groups, total, sent, failed, status, startTime, completedAt, userId, recentResults, detailedLog }
+const tgScheduledBroadcasts = new Map(); // scheduleId -> { data, scheduledTime, timerId, userId, timestamp }
+const tgGroupsCache = new Map();      // name -> { list, ts }
+const TG_GROUPS_CACHE_TTL = 2 * 60 * 1000; // 2 минуты
 
 const pushNotification = (payload) => {
   tgNotifications.unshift({ ...payload, id: Date.now() + Math.random() });
@@ -362,6 +366,318 @@ function addToJoinQueue(io, name, link) {
   });
 }
 
+// --- Функции рассылки ---
+async function fetchGroups(io, name) {
+  const cached = tgGroupsCache.get(name);
+  if (cached && (Date.now() - cached.ts) < TG_GROUPS_CACHE_TTL) {
+    return cached.list;
+  }
+
+  const client = await getOrCreateClient(io, name);
+  if (!client) throw new Error('Сессия не активна');
+  
+  try {
+    await client.connect();
+  } catch (e) {
+    throw new Error('Не удалось подключиться к сессии');
+  }
+
+  const dialogs = await client.getDialogs({});
+  const groups = [];
+
+  for (const d of dialogs) {
+    const ent = d.entity;
+    if (!ent) continue;
+
+    // Обычные групповые чаты
+    if (ent instanceof Api.Chat) {
+      groups.push({
+        id: String(ent.id),
+        title: ent.title || '(без названия)',
+        type: 'chat',
+        size: ent.participantsCount || 0,
+      });
+      continue;
+    }
+
+    // Супергруппы (megagroup=true)
+    if (ent instanceof Api.Channel && ent.megagroup) {
+      groups.push({
+        id: String(ent.id),
+        title: ent.title || ent.username || '(без названия)',
+        type: 'supergroup',
+        size: ent.participantsCount || 0,
+      });
+    }
+  }
+
+  const sortedGroups = groups.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+  tgGroupsCache.set(name, { list: sortedGroups, ts: Date.now() });
+  return sortedGroups;
+}
+
+function parseCustomInterval(text) {
+  const cleanText = text.toLowerCase().replace(/\s+/g, '');
+  
+  // Диапазон: 10-30 или 10-30сек
+  const rangeMatch = cleanText.match(/^(\d+)-(\d+)(сек)?$/);
+  if (rangeMatch) {
+    let min = parseInt(rangeMatch[1]);
+    let max = parseInt(rangeMatch[2]);
+    
+    if (min >= 3 && max >= min && max <= 3600) {
+      return { min, max };
+    }
+  }
+  
+  // Фиксированное значение: 5 или 5сек
+  const singleMatch = cleanText.match(/^(\d+)(сек)?$/);
+  if (singleMatch) {
+    let value = parseInt(singleMatch[1]);
+    
+    if (value >= 3 && value <= 3600) {
+      return { min: value, max: value };
+    }
+  }
+  
+  return null;
+}
+
+function parseScheduledTime(text) {
+  const cleanText = text.toLowerCase().trim();
+  const now = new Date();
+  
+  // Полная дата: ДД.ММ.ГГГГ ЧЧ:ММ
+  const fullDateMatch = cleanText.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
+  if (fullDateMatch) {
+    const [, day, month, year, hours, minutes] = fullDateMatch;
+    const date = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00`);
+    return date.getTime();
+  }
+  
+  // Сегодня ЧЧ:ММ
+  const todayMatch = cleanText.match(/^сегодня\s+(\d{2}):(\d{2})$/);
+  if (todayMatch) {
+    const [, hours, minutes] = todayMatch;
+    const date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    return date.getTime();
+  }
+  
+  // Завтра ЧЧ:ММ
+  const tomorrowMatch = cleanText.match(/^завтра\s+(\d{2}):(\d{2})$/);
+  if (tomorrowMatch) {
+    const [, hours, minutes] = tomorrowMatch;
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    return date.getTime();
+  }
+  
+  // Через N часов/минут
+  const throughMatch = cleanText.match(/^через\s+(\d+)\s+(час|часа|часов|минуту|минуты|минут)$/);
+  if (throughMatch) {
+    const [, amount, unit] = throughMatch;
+    const multiplier = unit.includes('час') ? 60 * 60 * 1000 : 60 * 1000;
+    return now.getTime() + (parseInt(amount) * multiplier);
+  }
+  
+  return null;
+}
+
+function formatTimeRemaining(ms) {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) {
+    return `${days}д ${hours % 24}ч ${minutes % 60}м`;
+  } else if (hours > 0) {
+    return `${hours}ч ${minutes % 60}м`;
+  } else if (minutes > 0) {
+    return `${minutes}м ${seconds % 60}с`;
+  } else {
+    return `${seconds}с`;
+  }
+}
+
+async function runBroadcast(io, broadcastId) {
+  const broadcast = tgBroadcasts.get(broadcastId);
+  if (!broadcast) return;
+  
+  const client = await getOrCreateClient(io, broadcast.sessionName);
+  if (!client) {
+    broadcast.status = 'error';
+    io.emit('tg_broadcast_update', { broadcastId, broadcast });
+    return;
+  }
+  
+  try {
+    await client.connect();
+  } catch (e) {
+    broadcast.status = 'error';
+    io.emit('tg_broadcast_update', { broadcastId, broadcast });
+    return;
+  }
+  
+  broadcast.recentResults = [];
+  broadcast.detailedLog = [];
+  
+  for (let i = 0; i < broadcast.groups.length; i++) {
+    if (broadcast.status !== 'running') break;
+    
+    const group = broadcast.groups[i];
+    const delay = Math.random() * (broadcast.maxInterval - broadcast.minInterval) + broadcast.minInterval;
+    
+    try {
+      const startTime = Date.now();
+      
+      // Получаем entity группы для правильной отправки
+      let groupEntity;
+      try {
+        const groupId = group.type === 'supergroup' ? parseInt(group.id) : parseInt(group.id);
+        groupEntity = await client.getEntity(groupId);
+      } catch (e) {
+        // Если не удалось получить entity, пробуем использовать ID напрямую
+        groupEntity = parseInt(group.id);
+      }
+      
+      // Отправка сообщения
+      if (broadcast.mediaType && broadcast.mediaInfo) {
+        // Отправка с медиа
+        const sendOptions = {
+          file: broadcast.mediaInfo.url,
+        };
+        
+        if (broadcast.messageText) {
+          sendOptions.caption = broadcast.messageText;
+        }
+        
+        // Для документов можно указать имя файла
+        if (broadcast.mediaType === 'document' && broadcast.mediaInfo.fileName) {
+          sendOptions.fileName = broadcast.mediaInfo.fileName;
+        }
+        
+        await client.sendFile(groupEntity, sendOptions);
+      } else {
+        // Отправка только текста
+        await client.sendMessage(groupEntity, { message: broadcast.messageText });
+      }
+      
+      const sendTime = Date.now() - startTime;
+      broadcast.sent++;
+      
+      const result = {
+        groupName: group.title,
+        groupId: group.id,
+        groupSize: group.size,
+        success: true,
+        sendTime: sendTime,
+        timestamp: new Date().toLocaleTimeString('ru-RU'),
+        nextDelay: i < broadcast.groups.length - 1 ? delay : 0
+      };
+      
+      broadcast.recentResults.push(result);
+      broadcast.detailedLog.push(result);
+      
+      if (broadcast.recentResults.length > 5) {
+        broadcast.recentResults.shift();
+      }
+      
+      // Обновление прогресса каждые 3 сообщения или на последнем
+      if (broadcast.sent === 1 || broadcast.sent % 3 === 0 || i === broadcast.groups.length - 1) {
+        io.emit('tg_broadcast_update', { broadcastId, broadcast });
+      }
+      
+    } catch (error) {
+      broadcast.failed++;
+      
+      const result = {
+        groupName: group.title,
+        groupId: group.id,
+        groupSize: group.size,
+        success: false,
+        error: error.message,
+        timestamp: new Date().toLocaleTimeString('ru-RU'),
+        nextDelay: i < broadcast.groups.length - 1 ? delay : 0
+      };
+      
+      broadcast.recentResults.push(result);
+      broadcast.detailedLog.push(result);
+      
+      if (broadcast.recentResults.length > 5) {
+        broadcast.recentResults.shift();
+      }
+      
+      console.error(`[TG_BROADCAST_ERROR] ${group.id}:`, error.message);
+      io.emit('tg_broadcast_update', { broadcastId, broadcast });
+    }
+    
+    // Пауза перед следующим сообщением
+    if (i < broadcast.groups.length - 1 && broadcast.status === 'running') {
+      await new Promise(resolve => setTimeout(resolve, delay * 1000));
+    }
+  }
+  
+  broadcast.status = 'completed';
+  broadcast.completedAt = Date.now();
+  io.emit('tg_broadcast_update', { broadcastId, broadcast });
+}
+
+async function executeScheduledBroadcast(io, scheduleId) {
+  const scheduled = tgScheduledBroadcasts.get(scheduleId);
+  if (!scheduled) return;
+  
+  try {
+    const { data } = scheduled;
+    const client = await getOrCreateClient(io, data.sessionName);
+    
+    if (!client) {
+      tgScheduledBroadcasts.delete(scheduleId);
+      io.emit('tg_scheduled_broadcast_cancelled', { scheduleId, reason: 'Сессия неактивна' });
+      return;
+    }
+    
+    const groups = await fetchGroups(io, data.sessionName);
+    if (groups.length === 0) {
+      tgScheduledBroadcasts.delete(scheduleId);
+      io.emit('tg_scheduled_broadcast_cancelled', { scheduleId, reason: 'Нет групп' });
+      return;
+    }
+    
+    const broadcastId = Date.now().toString();
+    tgBroadcasts.set(broadcastId, {
+      sessionName: data.sessionName,
+      messageText: data.messageText,
+      mediaType: data.mediaType,
+      mediaInfo: data.mediaInfo,
+      minInterval: data.minInterval,
+      maxInterval: data.maxInterval,
+      groups,
+      total: groups.length,
+      sent: 0,
+      failed: 0,
+      status: 'running',
+      startTime: Date.now(),
+      scheduled: true,
+      userId: scheduled.userId,
+      recentResults: [],
+      detailedLog: []
+    });
+    
+    io.emit('tg_broadcast_started', { broadcastId, scheduled: true });
+    runBroadcast(io, broadcastId).catch(e => {
+      console.error('[TG_SCHEDULED_BROADCAST_ERROR]', e);
+    });
+    
+  } catch (error) {
+    console.error('[TG_SCHEDULED_EXECUTION_ERROR]', { scheduleId, error: error.message });
+    tgScheduledBroadcasts.delete(scheduleId);
+    io.emit('tg_scheduled_broadcast_cancelled', { scheduleId, reason: error.message });
+  }
+}
+
 // --- Web server / API ---
 const app = express();
 const httpServer = createServer(app);
@@ -587,6 +903,206 @@ app.get('/api/tg/notifications', (req, res) => {
 app.delete('/api/tg/notifications', (req, res) => {
   tgNotifications.length = 0;
   res.json({ success: true });
+});
+
+// --- API для рассылки ---
+
+// POST /api/tg/sessions/:name/broadcast — создать и запустить рассылку
+app.post('/api/tg/sessions/:name/broadcast', async (req, res) => {
+  const { name } = req.params;
+  const { messageText, mediaType, mediaInfo, minInterval, maxInterval, scheduledTime } = req.body || {};
+  
+  try {
+    const client = await getOrCreateClient(io, name);
+    if (!client || tgSessionStatus.get(name) !== 'active') {
+      return res.status(400).json({ error: 'Сессия не активна' });
+    }
+    
+    if (!messageText && !mediaType) {
+      return res.status(400).json({ error: 'Нужен текст или медиафайл' });
+    }
+    
+    const minInt = Number(minInterval) || 5;
+    const maxInt = Number(maxInterval) || 15;
+    
+    if (minInt < 3 || maxInt < minInt || maxInt > 3600) {
+      return res.status(400).json({ error: 'Интервалы должны быть от 3 до 3600 сек, min ≤ max' });
+    }
+    
+    const groups = await fetchGroups(io, name);
+    if (groups.length === 0) {
+      return res.status(400).json({ error: 'Нет групп для рассылки' });
+    }
+    
+    // Если указано время планирования
+    if (scheduledTime) {
+      const scheduledTimestamp = typeof scheduledTime === 'string' ? parseScheduledTime(scheduledTime) : Number(scheduledTime);
+      
+      if (!scheduledTimestamp || scheduledTimestamp <= Date.now()) {
+        return res.status(400).json({ error: 'Время должно быть в будущем' });
+      }
+      
+      const scheduleId = `sched_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const delay = scheduledTimestamp - Date.now();
+      
+      const timerId = setTimeout(() => {
+        executeScheduledBroadcast(io, scheduleId).catch(e => {
+          console.error('[TG_SCHEDULED_TIMER_ERROR]', e);
+        });
+      }, delay);
+      
+      tgScheduledBroadcasts.set(scheduleId, {
+        data: {
+          sessionName: name,
+          messageText,
+          mediaType,
+          mediaInfo,
+          minInterval: minInt,
+          maxInterval: maxInt
+        },
+        scheduledTime: scheduledTimestamp,
+        timerId,
+        userId: req.body.userId || null,
+        timestamp: Date.now()
+      });
+      
+      return res.json({
+        success: true,
+        scheduleId,
+        scheduledTime: scheduledTimestamp,
+        timeRemaining: formatTimeRemaining(delay)
+      });
+    }
+    
+    // Немедленная рассылка
+    const broadcastId = Date.now().toString();
+    tgBroadcasts.set(broadcastId, {
+      sessionName: name,
+      messageText,
+      mediaType,
+      mediaInfo,
+      minInterval: minInt,
+      maxInterval: maxInt,
+      groups,
+      total: groups.length,
+      sent: 0,
+      failed: 0,
+      status: 'running',
+      startTime: Date.now(),
+      scheduled: false,
+      userId: req.body.userId || null,
+      recentResults: [],
+      detailedLog: []
+    });
+    
+    io.emit('tg_broadcast_started', { broadcastId });
+    
+    // Запускаем рассылку асинхронно
+    runBroadcast(io, broadcastId).catch(e => {
+      console.error('[TG_BROADCAST_RUN_ERROR]', e);
+    });
+    
+    res.json({
+      success: true,
+      broadcastId,
+      total: groups.length,
+      minInterval: minInt,
+      maxInterval: maxInt
+    });
+    
+  } catch (e) {
+    console.error('[TG_BROADCAST_CREATE_ERROR]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/tg/broadcasts — список всех рассылок
+app.get('/api/tg/broadcasts', (req, res) => {
+  try {
+    const broadcasts = Array.from(tgBroadcasts.entries()).map(([id, b]) => ({
+      id,
+      sessionName: b.sessionName,
+      status: b.status,
+      total: b.total,
+      sent: b.sent,
+      failed: b.failed,
+      startTime: b.startTime,
+      completedAt: b.completedAt,
+      scheduled: b.scheduled || false
+    }));
+    res.json({ broadcasts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/tg/broadcasts/:id — информация о рассылке
+app.get('/api/tg/broadcasts/:id', (req, res) => {
+  const { id } = req.params;
+  const broadcast = tgBroadcasts.get(id);
+  
+  if (!broadcast) {
+    return res.status(404).json({ error: 'Рассылка не найдена' });
+  }
+  
+  res.json({ broadcast });
+});
+
+// POST /api/tg/broadcasts/:id/stop — остановить рассылку
+app.post('/api/tg/broadcasts/:id/stop', (req, res) => {
+  const { id } = req.params;
+  const broadcast = tgBroadcasts.get(id);
+  
+  if (!broadcast) {
+    return res.status(404).json({ error: 'Рассылка не найдена' });
+  }
+  
+  broadcast.status = 'stopped';
+  io.emit('tg_broadcast_update', { broadcastId: id, broadcast });
+  res.json({ success: true });
+});
+
+// GET /api/tg/scheduled — список запланированных рассылок
+app.get('/api/tg/scheduled', (req, res) => {
+  try {
+    const scheduled = Array.from(tgScheduledBroadcasts.entries()).map(([id, s]) => ({
+      id,
+      sessionName: s.data.sessionName,
+      scheduledTime: s.scheduledTime,
+      timeRemaining: formatTimeRemaining(s.scheduledTime - Date.now()),
+      userId: s.userId
+    }));
+    res.json({ scheduled });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/tg/scheduled/:id — отменить запланированную рассылку
+app.delete('/api/tg/scheduled/:id', (req, res) => {
+  const { id } = req.params;
+  const scheduled = tgScheduledBroadcasts.get(id);
+  
+  if (!scheduled) {
+    return res.status(404).json({ error: 'Запланированная рассылка не найдена' });
+  }
+  
+  clearTimeout(scheduled.timerId);
+  tgScheduledBroadcasts.delete(id);
+  io.emit('tg_scheduled_broadcast_cancelled', { scheduleId: id, reason: 'Отменено пользователем' });
+  res.json({ success: true });
+});
+
+// POST /api/tg/sessions/:name/groups/refresh — обновить кеш групп
+app.post('/api/tg/sessions/:name/groups/refresh', async (req, res) => {
+  const { name } = req.params;
+  try {
+    tgGroupsCache.delete(name);
+    const groups = await fetchGroups(io, name);
+    res.json({ success: true, groups, count: groups.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // WebSocket

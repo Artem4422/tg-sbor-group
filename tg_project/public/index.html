@@ -5,70 +5,67 @@
   <title>TG Panel - Telegram Sessions</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
     :root {
-      color-scheme: dark;
-      --bg: #050716;
-      --card-bg: #0f172a;
-      --card-border: #1f2937;
-      --accent: #38bdf8;
-      --accent-soft: rgba(56,189,248,0.12);
-      --text: #e5e7eb;
-      --muted: #9ca3af;
-      --danger: #f97373;
-      --success: #4ade80;
-      --warning: #facc15;
+      color-scheme: light;
+      --bg: #faf8f5;
+      --card-bg: #ffffff;
+      --card-border: #e8e6e3;
+      --accent: #d97706;
+      --accent-soft: rgba(217,119,6,0.1);
+      --accent-hover: #b45309;
+      --text: #1f2937;
+      --text-light: #4b5563;
+      --muted: #6b7280;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #ea580c;
+      --border: #e5e7eb;
+      --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+      --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      --shadow-md: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
     }
     * {
       box-sizing: border-box;
     }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top left, #1d283a 0, #050716 45%, #020617 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #fef3e2 0%, #faf8f5 50%, #f5f3f0 100%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       align-items: stretch;
       justify-content: center;
-      padding: 24px;
+      padding: 32px 24px;
+      line-height: 1.6;
     }
     .container {
       width: 100%;
-      max-width: 1200px;
+      max-width: 1280px;
       display: grid;
       grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.1fr);
-      gap: 20px;
+      gap: 24px;
     }
     @media (max-width: 900px) {
       body {
-        padding: 12px;
+        padding: 20px 16px;
       }
       .container {
         grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
       }
     }
     .card {
-      background: radial-gradient(circle at top, rgba(148,163,184,0.16), transparent 55%) , var(--card-bg);
-      border-radius: 16px;
-      border: 1px solid rgba(148,163,184,0.25);
-      box-shadow:
-        0 18px 45px rgba(15,23,42,0.9),
-        0 0 0 1px rgba(148,163,184,0.18);
-      padding: 18px 18px 16px;
-      backdrop-filter: blur(24px);
+      background: var(--card-bg);
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow-md);
+      padding: 28px 24px;
       position: relative;
       overflow: hidden;
-    }
-    .card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(circle at top right, rgba(56,189,248,0.12), transparent 60%),
-        radial-gradient(circle at bottom left, rgba(129,140,248,0.12), transparent 65%);
-      opacity: 0.75;
-      pointer-events: none;
-      mix-blend-mode: screen;
     }
     .card-inner {
       position: relative;
@@ -78,60 +75,61 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-      gap: 10px;
+      margin-bottom: 20px;
+      gap: 16px;
     }
     .title {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      color: var(--text);
     }
     .title span.badge {
       font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.12em;
-      padding: 2px 7px;
-      border-radius: 999px;
-      background: rgba(15,23,42,0.7);
-      border: 1px solid rgba(148,163,184,0.45);
-      color: var(--muted);
+      letter-spacing: 0.08em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(217,119,6,0.2);
+      color: var(--accent);
+      font-weight: 600;
     }
     .title-gradient {
-      background: linear-gradient(120deg, #e5e7eb, #bae6fd, #a5b4fc);
-      -webkit-background-clip: text;
-      color: transparent;
+      color: var(--text);
+      font-weight: 700;
     }
     .pill {
-      padding: 4px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.35);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-light);
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      background: radial-gradient(circle at top left, rgba(59,130,246,0.25), transparent 55%);
+      gap: 8px;
+      background: var(--card-bg);
+      box-shadow: var(--shadow-sm);
     }
     .pill-dot {
-      width: 7px;
-      height: 7px;
+      width: 8px;
+      height: 8px;
       border-radius: 999px;
       background: var(--success);
-      box-shadow: 0 0 0 6px rgba(74,222,128,0.18);
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
     }
     .sessions-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: 10px;
-      margin-top: 4px;
-      max-height: 440px;
+      gap: 12px;
+      margin-top: 8px;
+      max-height: 500px;
       overflow: auto;
-      padding-right: 6px;
+      padding-right: 8px;
     }
     @media (min-width: 1100px) {
       .sessions-grid {
@@ -139,21 +137,19 @@
       }
     }
     .session-card {
-      background: rgba(15,23,42,0.92);
-      border-radius: 14px;
-      border: 1px solid rgba(148,163,184,0.35);
-      padding: 12px 12px 10px;
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 16px;
       position: relative;
       overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
     }
-    .session-card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at top left, rgba(56,189,248,0.19), transparent 60%);
-      opacity: 0.9;
-      mix-blend-mode: screen;
-      pointer-events: none;
+    .session-card:hover {
+      box-shadow: var(--shadow);
+      border-color: var(--accent);
+      transform: translateY(-2px);
     }
     .session-main {
       position: relative;
@@ -165,43 +161,46 @@
     }
     .session-name {
       font-weight: 600;
-      font-size: 14px;
+      font-size: 15px;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+      color: var(--text);
     }
     .status-dot {
-      width: 9px;
-      height: 9px;
+      width: 10px;
+      height: 10px;
       border-radius: 999px;
       background: var(--muted);
-      box-shadow: 0 0 0 3px rgba(148,163,184,0.3);
+      box-shadow: 0 0 0 2px rgba(107,114,128,0.2);
     }
     .status-dot.active {
       background: var(--success);
-      box-shadow: 0 0 0 3px rgba(74,222,128,0.3);
+      box-shadow: 0 0 0 2px rgba(22,163,74,0.2);
     }
     .status-dot.syncing {
       background: var(--warning);
-      box-shadow: 0 0 0 3px rgba(250,204,21,0.3);
+      box-shadow: 0 0 0 2px rgba(234,88,12,0.2);
     }
     .status-dot.error {
       background: var(--danger);
-      box-shadow: 0 0 0 3px rgba(248,113,113,0.3);
+      box-shadow: 0 0 0 2px rgba(220,38,38,0.2);
     }
     .session-meta {
-      margin-top: 4px;
-      font-size: 11px;
-      color: var(--muted);
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-light);
       display: flex;
       flex-wrap: wrap;
-      gap: 6px 10px;
+      gap: 6px 8px;
     }
     .meta-pill {
-      padding: 2px 7px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.35);
-      background: rgba(15,23,42,0.8);
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      color: var(--text-light);
+      font-weight: 500;
     }
     .session-actions {
       position: relative;
@@ -219,44 +218,63 @@
       background: transparent;
     }
     .btn {
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: radial-gradient(circle at top left, rgba(56,189,248,0.3), rgba(15,23,42,0.95));
-      font-size: 11px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.14s ease-out;
+      transition: all 0.2s ease;
       white-space: nowrap;
+      cursor: pointer;
     }
     .btn:hover {
+      background: var(--accent-hover);
       transform: translateY(-1px);
-      box-shadow: 0 10px 20px rgba(15,23,42,0.8);
-      border-color: rgba(191,219,254,0.9);
+      box-shadow: var(--shadow);
+      border-color: var(--accent-hover);
+    }
+    .btn:active {
+      transform: translateY(0);
     }
     .btn-ghost {
-      background: rgba(15,23,42,0.88);
-      border-color: rgba(148,163,184,0.5);
+      background: var(--card-bg);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-ghost:hover {
+      background: #f9fafb;
+      border-color: var(--accent);
+      color: var(--accent);
     }
     .btn-danger {
-      background: linear-gradient(135deg, rgba(248,113,113,0.2), rgba(127,29,29,0.95));
-      border-color: rgba(248,113,113,0.8);
+      background: var(--danger);
+      border-color: var(--danger);
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #b91c1c;
+      border-color: #b91c1c;
     }
     .btn-sm {
       padding: 4px 9px;
       font-size: 10px;
     }
     .section-title {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: var(--muted);
-      margin-bottom: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 12px;
     }
     .section-title span.indicator {
       font-size: 11px;
@@ -272,28 +290,35 @@
       margin-bottom: 10px;
     }
     label {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    input {
-      width: 100%;
-      padding: 7px 10px;
-      border-radius: 10px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.9);
-      color: var(--text);
       font-size: 13px;
-      outline: none;
-      transition: border-color 0.1s ease-out, box-shadow 0.1s ease-out, background 0.1s ease-out;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
     }
-    input:focus {
-      border-color: rgba(56,189,248,0.9);
-      box-shadow: 0 0 0 1px rgba(56,189,248,0.4);
-      background: rgba(15,23,42,1);
+    input, textarea, select {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+      background: var(--card-bg);
+    }
+    input::placeholder, textarea::placeholder {
+      color: var(--muted);
     }
     .helper {
-      font-size: 11px;
-      color: var(--muted);
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 4px;
     }
     .code-input {
       letter-spacing: 0.32em;
@@ -301,25 +326,27 @@
       font-weight: 600;
     }
     .log {
-      margin-top: 8px;
-      font-size: 11px;
-      max-height: 150px;
+      margin-top: 12px;
+      font-size: 12px;
+      max-height: 200px;
       overflow: auto;
-      padding: 8px 9px;
+      padding: 12px;
       border-radius: 12px;
-      background: rgba(15,23,42,0.92);
-      border: 1px solid rgba(30,64,175,0.7);
+      background: #f9fafb;
+      border: 1px solid var(--border);
     }
     .log-line {
-      color: var(--muted);
-      margin-bottom: 3px;
+      color: var(--text-light);
+      margin-bottom: 6px;
       white-space: pre-wrap;
       word-break: break-word;
+      line-height: 1.5;
     }
     .log-line time {
-      color: rgba(148,163,184,0.9);
-      font-size: 10px;
-      margin-right: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      margin-right: 8px;
+      font-weight: 500;
     }
     .chips {
       display: flex;
@@ -328,29 +355,33 @@
       margin-top: 4px;
     }
     .chip {
-      font-size: 10px;
-      padding: 3px 7px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.95);
-      color: var(--muted);
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      color: var(--text-light);
+      font-weight: 500;
     }
     .badge-number {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 16px;
-      height: 16px;
-      border-radius: 999px;
-      background: rgba(15,23,42,0.9);
-      border: 1px solid rgba(148,163,184,0.7);
-      font-size: 10px;
-      padding: 0 5px;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(217,119,6,0.2);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 0 6px;
     }
     .notif-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(15,23,42,0.85);
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -359,25 +390,26 @@
     .notif-panel {
       width: 100%;
       max-width: 720px;
-      max-height: 480px;
-      background: radial-gradient(circle at top, rgba(148,163,184,0.18), transparent 55%), #020617;
-      border-radius: 18px;
-      border: 1px solid rgba(148,163,184,0.5);
-      box-shadow: 0 30px 80px rgba(15,23,42,0.95);
-      padding: 14px 16px 12px;
+      max-height: 600px;
+      background: var(--card-bg);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 16px;
     }
     .notif-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--muted);
+      gap: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: -0.01em;
+      color: var(--text);
     }
     .notif-list {
       flex: 1;
@@ -386,18 +418,23 @@
       font-size: 12px;
     }
     .notif-item {
-      padding: 6px 8px;
-      border-radius: 10px;
-      border: 1px solid rgba(31,41,55,0.9);
-      background: radial-gradient(circle at top left, rgba(15,118,110,0.35), rgba(15,23,42,0.95));
-      margin-bottom: 6px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      margin-bottom: 8px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .notif-item:hover {
+      background: #f3f4f6;
+      border-color: var(--accent);
     }
     .notif-item.error {
-      background: radial-gradient(circle at top left, rgba(248,113,113,0.28), rgba(15,23,42,0.96));
-      border-color: rgba(127,29,29,0.9);
+      background: #fef2f2;
+      border-color: rgba(220,38,38,0.3);
     }
     .notif-top {
       display: flex;
@@ -406,8 +443,9 @@
       gap: 8px;
     }
     .notif-link {
-      color: #bfdbfe;
+      color: var(--accent);
       word-break: break-all;
+      font-weight: 500;
     }
     .notif-meta {
       font-size: 11px;
@@ -419,7 +457,8 @@
     .groups-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(15,23,42,0.9);
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -428,25 +467,26 @@
     .groups-panel {
       width: 100%;
       max-width: 720px;
-      max-height: 480px;
-      background: radial-gradient(circle at top, rgba(148,163,184,0.18), transparent 55%), #020617;
-      border-radius: 18px;
-      border: 1px solid rgba(148,163,184,0.5);
-      box-shadow: 0 30px 80px rgba(15,23,42,0.95);
-      padding: 14px 16px 12px;
+      max-height: 600px;
+      background: var(--card-bg);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 16px;
     }
     .groups-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--muted);
+      gap: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: -0.01em;
+      color: var(--text);
     }
     .groups-list {
       flex: 1;
@@ -455,14 +495,19 @@
       font-size: 12px;
     }
     .group-item {
-      padding: 6px 8px;
-      border-radius: 10px;
-      border: 1px solid rgba(31,41,55,0.9);
-      background: radial-gradient(circle at top left, rgba(59,130,246,0.3), rgba(15,23,42,0.96));
-      margin-bottom: 6px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      margin-bottom: 8px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .group-item:hover {
+      background: #f3f4f6;
+      border-color: var(--accent);
     }
     .group-title-line {
       display: flex;
@@ -614,6 +659,58 @@
     </div>
   </div>
 
+  <div id="broadcastOverlay" class="groups-overlay">
+    <div class="groups-panel" style="max-width: 600px;">
+      <div class="groups-header">
+        <span id="broadcastTitle">📢 Настройка рассылки</span>
+        <button id="closeBroadcast" class="btn btn-sm btn-danger">✕ Закрыть</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="field-group">
+          <label>Текст сообщения</label>
+          <textarea id="broadcastText" placeholder="Введите текст для рассылки..." style="min-height: 80px; resize: vertical; font-family: inherit;"></textarea>
+        </div>
+        <div class="field-group">
+          <label>URL медиафайла (опционально)</label>
+          <input id="broadcastMediaUrl" placeholder="https://example.com/image.jpg" />
+          <div class="helper">Поддерживаются: изображения, видео, документы</div>
+        </div>
+        <div class="field-group">
+          <label>Тип медиа</label>
+          <select id="broadcastMediaType" style="width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid rgba(148,163,184,0.6); background: rgba(15,23,42,0.9); color: var(--text); font-size: 13px;">
+            <option value="">Без медиа (только текст)</option>
+            <option value="image">Изображение</option>
+            <option value="video">Видео</option>
+            <option value="document">Документ</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Интервал между отправками (сек.)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="broadcastMinInterval" type="number" min="3" max="3600" style="flex:1;" placeholder="мин, напр. 5" value="5" />
+            <input id="broadcastMaxInterval" type="number" min="3" max="3600" style="flex:1;" placeholder="макс, напр. 15" value="15" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label>
+            <input type="checkbox" id="broadcastScheduled" style="width: auto; margin-right: 8px;" />
+            Запланировать рассылку
+          </label>
+          <input id="broadcastScheduleTime" placeholder="сегодня 18:00, завтра 09:00, через 2 часа" style="display: none;" />
+          <div class="helper" id="broadcastScheduleHelper" style="display: none;">Форматы: "сегодня ЧЧ:ММ", "завтра ЧЧ:ММ", "через N часов/минут"</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button id="startBroadcast" class="btn" style="flex: 1; justify-content: center;">
+            <span>🚀 Запустить рассылку</span>
+          </button>
+          <button id="cancelBroadcast" class="btn btn-ghost" style="flex: 1; justify-content: center;">
+            <span>❌ Отмена</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionsContainer = document.getElementById('sessions');
@@ -646,6 +743,20 @@
     let lastNotifications = [];
     let lastGroups = [];
     let currentGroupsSession = null;
+    let currentBroadcastSession = null;
+    const broadcastOverlay = document.getElementById('broadcastOverlay');
+    const broadcastTitle = document.getElementById('broadcastTitle');
+    const broadcastText = document.getElementById('broadcastText');
+    const broadcastMediaUrl = document.getElementById('broadcastMediaUrl');
+    const broadcastMediaType = document.getElementById('broadcastMediaType');
+    const broadcastMinInterval = document.getElementById('broadcastMinInterval');
+    const broadcastMaxInterval = document.getElementById('broadcastMaxInterval');
+    const broadcastScheduled = document.getElementById('broadcastScheduled');
+    const broadcastScheduleTime = document.getElementById('broadcastScheduleTime');
+    const broadcastScheduleHelper = document.getElementById('broadcastScheduleHelper');
+    const startBroadcastBtn = document.getElementById('startBroadcast');
+    const cancelBroadcastBtn = document.getElementById('cancelBroadcast');
+    const closeBroadcastBtn = document.getElementById('closeBroadcast');
 
     function log(message, type = 'info') {
       const line = document.createElement('div');
@@ -655,10 +766,14 @@
       line.appendChild(ts);
       const span = document.createElement('span');
       span.textContent = ' ' + message;
-      if (type === 'error') {
-        span.style.color = '#fca5a5';
+        if (type === 'error') {
+        span.style.color = 'var(--danger)';
+        span.style.fontWeight = '500';
       } else if (type === 'success') {
-        span.style.color = '#bbf7d0';
+        span.style.color = 'var(--success)';
+        span.style.fontWeight = '500';
+      } else if (type === 'info') {
+        span.style.color = 'var(--text-light)';
       }
       line.appendChild(span);
       logEl.appendChild(line);
@@ -670,7 +785,9 @@
       if (!lastGroups.length) {
         const empty = document.createElement('div');
         empty.textContent = 'Группы не найдены или сессия не активна.';
-        empty.style.color = '#9ca3af';
+        empty.style.color = 'var(--text-light)';
+        empty.style.padding = '20px';
+        empty.style.textAlign = 'center';
         groupsList.appendChild(empty);
         return;
       }
@@ -715,7 +832,9 @@
       if (!lastNotifications.length) {
         const empty = document.createElement('div');
         empty.textContent = 'Пока нет уведомлений.';
-        empty.style.color = '#9ca3af';
+        empty.style.color = 'var(--text-light)';
+        empty.style.padding = '20px';
+        empty.style.textAlign = 'center';
         notifList.appendChild(empty);
         return;
       }
@@ -729,8 +848,9 @@
         const time = document.createElement('div');
         const d = new Date(n.at);
         time.textContent = d.toLocaleTimeString('ru-RU', { hour12: false }) + ' ' + d.toLocaleDateString('ru-RU');
-        time.style.fontSize = '11px';
-        time.style.color = '#9ca3af';
+        time.style.fontSize = '12px';
+        time.style.color = 'var(--text-light)';
+        time.style.fontWeight = '500';
         top.appendChild(title);
         top.appendChild(time);
         item.appendChild(top);
@@ -762,8 +882,10 @@
       if (!sessions.length) {
         const empty = document.createElement('div');
         empty.textContent = 'Сессий пока нет. Создайте первую справа.';
-        empty.style.fontSize = '12px';
-        empty.style.color = '#9ca3af';
+        empty.style.fontSize = '14px';
+        empty.style.color = 'var(--text-light)';
+        empty.style.padding = '40px 20px';
+        empty.style.textAlign = 'center';
         sessionsContainer.appendChild(empty);
         return;
       }
@@ -849,6 +971,20 @@
           }
         };
         right.appendChild(groupsBtn);
+
+        if (s.status === 'active') {
+          const broadcastBtn = document.createElement('button');
+          broadcastBtn.className = 'btn btn-sm';
+          broadcastBtn.style.background = 'var(--accent)';
+          broadcastBtn.style.borderColor = 'var(--accent)';
+          broadcastBtn.style.color = 'white';
+          broadcastBtn.textContent = '📢 Рассылка';
+          broadcastBtn.onclick = async (ev) => {
+            ev.stopPropagation();
+            openBroadcastModal(s.name);
+          };
+          right.appendChild(broadcastBtn);
+        }
 
         if (s.status !== 'active') {
           const actBtn = document.createElement('button');
@@ -1071,6 +1207,124 @@
       groupsOverlay.style.display = 'none';
     };
 
+    function openBroadcastModal(sessionName) {
+      currentBroadcastSession = sessionName;
+      broadcastTitle.textContent = `📢 Рассылка: ${sessionName}`;
+      broadcastText.value = '';
+      broadcastMediaUrl.value = '';
+      broadcastMediaType.value = '';
+      broadcastMinInterval.value = '5';
+      broadcastMaxInterval.value = '15';
+      broadcastScheduled.checked = false;
+      broadcastScheduleTime.value = '';
+      broadcastScheduleTime.style.display = 'none';
+      broadcastScheduleHelper.style.display = 'none';
+      broadcastOverlay.style.display = 'flex';
+    }
+
+    broadcastScheduled.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        broadcastScheduleTime.style.display = 'block';
+        broadcastScheduleHelper.style.display = 'block';
+      } else {
+        broadcastScheduleTime.style.display = 'none';
+        broadcastScheduleHelper.style.display = 'none';
+      }
+    });
+
+    closeBroadcastBtn.onclick = () => {
+      broadcastOverlay.style.display = 'none';
+    };
+
+    cancelBroadcastBtn.onclick = () => {
+      broadcastOverlay.style.display = 'none';
+    };
+
+    startBroadcastBtn.onclick = async () => {
+      if (!currentBroadcastSession) {
+        log('Сессия не выбрана', 'error');
+        return;
+      }
+
+      const messageText = broadcastText.value.trim();
+      const mediaUrl = broadcastMediaUrl.value.trim();
+      const mediaType = broadcastMediaType.value;
+      const minInterval = Number(broadcastMinInterval.value);
+      const maxInterval = Number(broadcastMaxInterval.value);
+      const isScheduled = broadcastScheduled.checked;
+      const scheduleTime = broadcastScheduleTime.value.trim();
+
+      if (!messageText && !mediaType) {
+        log('Введите текст или выберите медиафайл', 'error');
+        return;
+      }
+
+      if (mediaType && !mediaUrl) {
+        log('Введите URL медиафайла', 'error');
+        return;
+      }
+
+      if (!Number.isFinite(minInterval) || !Number.isFinite(maxInterval)) {
+        log('Введите корректные интервалы', 'error');
+        return;
+      }
+
+      if (minInterval < 3 || maxInterval < minInterval || maxInterval > 3600) {
+        log('Интервалы должны быть от 3 до 3600 сек, min ≤ max', 'error');
+        return;
+      }
+
+      if (isScheduled && !scheduleTime) {
+        log('Введите время для запланированной рассылки', 'error');
+        return;
+      }
+
+      try {
+        startBroadcastBtn.disabled = true;
+        startBroadcastBtn.textContent = '⏳ Запуск...';
+
+        const body = {
+          messageText: messageText || undefined,
+          minInterval,
+          maxInterval,
+        };
+
+        if (mediaType && mediaUrl) {
+          body.mediaType = mediaType;
+          body.mediaInfo = {
+            url: mediaUrl,
+            fileName: mediaUrl.split('/').pop()
+          };
+        }
+
+        if (isScheduled) {
+          body.scheduledTime = scheduleTime;
+        }
+
+        const res = await fetch(`/api/tg/sessions/${encodeURIComponent(currentBroadcastSession)}/broadcast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка запуска рассылки');
+
+        if (isScheduled) {
+          log(`✅ Рассылка запланирована для ${currentBroadcastSession}. Запуск: ${scheduleTime}`, 'success');
+        } else {
+          log(`✅ Рассылка запущена для ${currentBroadcastSession}. Групп: ${data.total || 'загрузка...'}`, 'success');
+        }
+
+        broadcastOverlay.style.display = 'none';
+      } catch (e) {
+        log('Ошибка запуска рассылки: ' + e.message, 'error');
+      } finally {
+        startBroadcastBtn.disabled = false;
+        startBroadcastBtn.innerHTML = '<span>🚀 Запустить рассылку</span>';
+      }
+    };
+
     // WebSocket for live updates
     const socket = io();
     socket.on('connect', () => {
@@ -1081,6 +1335,19 @@
     });
     socket.on('tg_join_queue_update', () => {
       loadSessions();
+    });
+    socket.on('tg_broadcast_started', (data) => {
+      log(`🚀 Рассылка запущена (ID: ${data.broadcastId})`, 'success');
+    });
+    socket.on('tg_broadcast_update', (data) => {
+      const b = data.broadcast;
+      if (b) {
+        const progress = Math.round((b.sent / b.total) * 100);
+        log(`📊 Рассылка ${data.broadcastId}: ${b.sent}/${b.total} (${progress}%)`, 'info');
+      }
+    });
+    socket.on('tg_scheduled_broadcast_cancelled', (data) => {
+      log(`❌ Запланированная рассылка отменена: ${data.reason}`, 'error');
     });
 
     loadSessions();
