@@ -32,6 +32,7 @@ const tgSessionStatus = new Map();    // name -> 'inactive' | 'auth' | 'active' 
 const tgSessionMeta = new Map();      // name -> { phone }
 const tgJoinQueue = new Map();        // name -> [{ link, timestamp }]
 const processingJoin = new Map();     // name -> boolean
+const tgJoinStopFlags = new Map();    // name -> boolean (флаг остановки вступления)
 const tgSessionIntervals = new Map(); // name -> { min, max } (сек)
 const tgBadLinks = new Set();         // ссылки, по которым уже была "фатальная" ошибка
 const tgJoinedLinks = new Set();      // ссылки, в которые уже успешно вошли
@@ -257,6 +258,15 @@ async function processJoinQueue(io, name) {
   const intervals = tgSessionIntervals.get(name) || { min: 5, max: 30 };
 
   while (queue.length) {
+    // Проверка флага остановки
+    if (tgJoinStopFlags.get(name)) {
+      console.log(`[TG_JOIN_STOPPED] ${name}: вступление остановлено пользователем`);
+      tgJoinStopFlags.delete(name);
+      processingJoin.set(name, false);
+      io.emit('tg_join_queue_update', { name, stopped: true });
+      return;
+    }
+    
     const task = queue.shift();
     if (!task) break;
     io.emit('tg_join_queue_update', { name });
@@ -331,11 +341,31 @@ async function processJoinQueue(io, name) {
 
     await saveClientSession(name);
 
+    // Проверка флага остановки перед паузой
+    if (tgJoinStopFlags.get(name)) {
+      console.log(`[TG_JOIN_STOPPED] ${name}: вступление остановлено пользователем`);
+      tgJoinStopFlags.delete(name);
+      processingJoin.set(name, false);
+      io.emit('tg_join_queue_update', { name, stopped: true });
+      return;
+    }
+
     const delayMin = Math.max(3, intervals.min || 5);
     const delayMax = Math.min(3600, intervals.max || 30);
     const delay = Math.floor(Math.random() * (delayMax - delayMin) + delayMin);
     console.log(`[TG_JOIN] ${name}: пауза ${delay} сек до следующей ссылки`);
-    await new Promise(r => setTimeout(r, delay * 1000));
+    
+    // Проверка флага остановки во время паузы (каждую секунду)
+    for (let i = 0; i < delay; i++) {
+      if (tgJoinStopFlags.get(name)) {
+        console.log(`[TG_JOIN_STOPPED] ${name}: вступление остановлено пользователем`);
+        tgJoinStopFlags.delete(name);
+        processingJoin.set(name, false);
+        io.emit('tg_join_queue_update', { name, stopped: true });
+        return;
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
 
   processingJoin.set(name, false);
@@ -684,7 +714,6 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*' } });
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // GET /api/tg/sessions
 app.get('/api/tg/sessions', (req, res) => {
@@ -696,6 +725,7 @@ app.get('/api/tg/sessions', (req, res) => {
       statusText: sessionHuman(tgSessionStatus.get(name) || 'inactive'),
       phone: tgSessionMeta.get(name)?.phone || null,
       joinQueueLength: (tgJoinQueue.get(name)?.length) || 0,
+      isProcessingJoin: processingJoin.get(name) || false,
       intervals: tgSessionIntervals.get(name) || { min: 5, max: 30 },
       lastJoin: tgLastJoin.get(name) || null,
     }));
@@ -776,6 +806,7 @@ app.get('/api/tg/sessions/:name', (req, res) => {
       statusText: sessionHuman(status),
       phone: tgSessionMeta.get(name)?.phone || null,
       joinQueueLength: (tgJoinQueue.get(name)?.length) || 0,
+      isProcessingJoin: processingJoin.get(name) || false,
       intervals: tgSessionIntervals.get(name) || { min: 5, max: 30 },
       lastJoin: tgLastJoin.get(name) || null,
     });
@@ -801,6 +832,7 @@ app.delete('/api/tg/sessions/:name', async (req, res) => {
     tgSessionMeta.delete(name);
     tgJoinQueue.delete(name);
     processingJoin.delete(name);
+    tgJoinStopFlags.delete(name);
 
     try {
       fs.unlinkSync(filePath);
@@ -1104,6 +1136,72 @@ app.post('/api/tg/sessions/:name/groups/refresh', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// POST /api/tg/sessions/:name/join/stop — остановить вступление в группы
+app.post('/api/tg/sessions/:name/join/stop', (req, res) => {
+  const { name } = req.params;
+  try {
+    tgJoinStopFlags.set(name, true);
+    io.emit('tg_join_queue_update', { name, stopped: true });
+    res.json({ success: true, message: 'Вступление в группы остановлено' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/tg/sessions/:name/join/start — запустить вступление в группы
+app.post('/api/tg/sessions/:name/join/start', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const queue = tgJoinQueue.get(name) || [];
+    if (queue.length === 0) {
+      return res.status(400).json({ error: 'Очередь вступления пуста' });
+    }
+    
+    if (processingJoin.get(name)) {
+      return res.status(400).json({ error: 'Вступление уже обрабатывается' });
+    }
+    
+    // Убираем флаг остановки если был установлен
+    tgJoinStopFlags.delete(name);
+    
+    // Запускаем обработку очереди
+    processJoinQueue(io, name).catch(e => {
+      console.error(`[TG_JOIN_START_ERROR] ${name}:`, e.message);
+    });
+    
+    io.emit('tg_join_queue_update', { name, started: true });
+    res.json({ success: true, message: 'Вступление в группы запущено', queueLength: queue.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/tg/sessions/:name/broadcasts — получить активные рассылки для сессии
+app.get('/api/tg/sessions/:name/broadcasts', (req, res) => {
+  const { name } = req.params;
+  try {
+    const sessionBroadcasts = Array.from(tgBroadcasts.entries())
+      .filter(([id, b]) => b.sessionName === name && b.status === 'running')
+      .map(([id, b]) => ({
+        id,
+        sessionName: b.sessionName,
+        status: b.status,
+        total: b.total,
+        sent: b.sent,
+        failed: b.failed,
+        startTime: b.startTime,
+        minInterval: b.minInterval,
+        maxInterval: b.maxInterval
+      }));
+    res.json({ broadcasts: sessionBroadcasts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Статический middleware для обслуживания фронтенда (должен быть после всех API routes)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // WebSocket
 io.on('connection', (socket) => {
